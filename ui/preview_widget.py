@@ -13,7 +13,7 @@ from collections.abc import Callable
 import numpy as np
 import numpy.typing as npt
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QWidget
@@ -34,6 +34,9 @@ class PreviewWidget(QOpenGLWidget):
     ) -> None:
         super().__init__(parent)
         self.setMinimumSize(640, 360)
+        # QOpenGLWidget 不支持样式表背景（Qt 已知限制）：
+        # 禁止样式背景绘制，避免全局 QSS 覆盖渲染内容。
+        self.setAttribute(Qt.WA_StyledBackground, False)
 
         # ModernGL 需要 OpenGL 3.3+ Core Profile
         fmt = QSurfaceFormat()
@@ -74,7 +77,12 @@ class PreviewWidget(QOpenGLWidget):
             else None
         )
         self.renderer.update(now, state)
-        self.renderer.render()
+        # QOpenGLWidget 渲染进它的内部 FBO（而非帧缓冲 0）：
+        # 每帧把 Qt 的默认帧缓冲包装成渲染目标，否则最终合成会画错地方（黑屏）。
+        target = None
+        if self.renderer.ctx is not None:
+            target = self.renderer.ctx.detect_framebuffer()
+        self.renderer.render(target=target)
 
     def resizeGL(self, width: int, height: int) -> None:
         self.renderer.resize(width, height)
