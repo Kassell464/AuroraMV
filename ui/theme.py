@@ -4,11 +4,15 @@
 """
 
 DARK_QSS = """
+/* 注意：不给通用 QWidget 设背景色——QOpenGLWidget 不支持样式表背景，
+   会导致预览区渲染内容被纯色背景覆盖（Qt 已知限制）。 */
 QWidget {
-    background-color: #101014;
     color: #d5d7e0;
     font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
     font-size: 13px;
+}
+QMainWindow, QDialog {
+    background-color: #101014;
 }
 
 /* 控制面板 */
