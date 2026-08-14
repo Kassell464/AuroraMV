@@ -10,7 +10,6 @@ from PySide6.QtCore import (
     QAbstractAnimation,
     QPropertyAnimation,
     Qt,
-    QTimer,
     Signal,
 )
 from PySide6.QtWidgets import (
@@ -106,9 +105,7 @@ class ControlPanel(QFrame):
 
     preset_selected = Signal(str)  # 预设名；"auto" = 自动切换
     effect_param_changed = Signal(str, str, float)  # 效果名, 参数名, 值
-    play_pause_requested = Signal()
     export_requested = Signal(object, str)  # (ExportSettings, 输出路径)
-    seek_requested = Signal(float)  # 秒
     audio_file_selected = Signal(str)
     lrc_file_selected = Signal(str)
 
@@ -118,10 +115,6 @@ class ControlPanel(QFrame):
         self.setFixedWidth(320)
         self.cards: dict[str, PresetCard] = {}
         self._fade_done = False
-        self._playing = False
-        self._pulse_on = False
-        self._dragging = False
-        self._duration = 1.0
         self._build()
 
     # ---------- 构建 ----------
@@ -213,19 +206,6 @@ class ControlPanel(QFrame):
         self._export_status.setWordWrap(True)
         layout.addWidget(self._export_status)
 
-        # 播放进度（可拖动）
-        layout.addWidget(self._section("播放进度", content))
-        progress_row = QHBoxLayout()
-        self._time_label = QLabel("0:00 / 0:00", content)
-        self._time_label.setProperty("muted", True)
-        self._seek_slider = QSlider(Qt.Horizontal, content)
-        self._seek_slider.setRange(0, 1000)
-        self._seek_slider.sliderPressed.connect(lambda: setattr(self, "_dragging", True))
-        self._seek_slider.sliderReleased.connect(self._on_seek_released)
-        progress_row.addWidget(self._time_label)
-        progress_row.addWidget(self._seek_slider, 1)
-        layout.addLayout(progress_row)
-
         # 导入
         layout.addWidget(self._section("导入", content))
         import_row = QHBoxLayout()
@@ -237,19 +217,9 @@ class ControlPanel(QFrame):
         import_row.addWidget(self._lrc_button, 1)
         layout.addLayout(import_row)
 
-        # 播放控制
-        self._play_button = QPushButton("⏸ 暂停", content)
-        self._play_button.setProperty("accent", True)
-        self._play_button.clicked.connect(self._on_play_clicked)
-        layout.addWidget(self._play_button)
-
         layout.addStretch(1)
         scroll.setWidget(content)
         outer.addWidget(scroll)
-
-        self._pulse_timer = QTimer(self)
-        self._pulse_timer.setInterval(600)
-        self._pulse_timer.timeout.connect(self._toggle_pulse)
 
     def _section(self, text: str, parent: QWidget) -> QLabel:
         label = QLabel(text, parent)
@@ -310,14 +280,6 @@ class ControlPanel(QFrame):
         self.select_preset(name)
         self.preset_selected.emit(name)
 
-    def _on_play_clicked(self) -> None:
-        self.play_pause_requested.emit()
-
-    def _on_seek_released(self) -> None:
-        self._dragging = False
-        seconds = self._seek_slider.value() / 1000.0 * self._duration
-        self.seek_requested.emit(seconds)
-
     def _import_audio(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, "选择音频", "", "音频 (*.wav *.mp3 *.flac)"
@@ -347,15 +309,6 @@ class ControlPanel(QFrame):
         )
         self.export_requested.emit(settings, self._output_edit.text().strip())
 
-    def _toggle_pulse(self) -> None:
-        self._pulse_on = not self._pulse_on
-        self._update_play_button()
-
-    def _update_play_button(self) -> None:
-        self._play_button.setProperty("pulse", self._playing and self._pulse_on)
-        self._play_button.style().unpolish(self._play_button)
-        self._play_button.style().polish(self._play_button)
-
     # ---------- 公开接口 ----------
 
     def set_presets(self, presets: list[ScenePreset]) -> None:
@@ -380,39 +333,32 @@ class ControlPanel(QFrame):
             card.set_selected(card_name == name)
         self._auto_card.set_selected(name == "auto")
 
-    def set_playing(self, playing: bool) -> None:
-        self._playing = playing
-        self._play_button.setText("⏸ 暂停" if playing else "▶ 播放")
-        if playing:
-            self._pulse_timer.start()
-        else:
-            self._pulse_timer.stop()
-            self._pulse_on = False
-        self._update_play_button()
-
-    def set_progress(self, position: float, duration: float) -> None:
-        """更新播放进度显示（由控制器轮询）。"""
-        self._duration = max(duration, 0.01)
-        if not self._dragging:
-            fraction = max(0.0, min(1.0, position / self._duration))
-            self._seek_slider.blockSignals(True)
-            self._seek_slider.setValue(int(fraction * 1000))
-            self._seek_slider.blockSignals(False)
-        self._time_label.setText(f"{_format_time(position)} / {_format_time(duration)}")
-
     def set_export_progress(self, done: int, total: int) -> None:
+        """更新导出进度（含百分比与预估剩余时间）。"""
+        import time
+
         self._progress.setVisible(True)
         self._progress.setRange(0, total)
         self._progress.setValue(done)
+        elapsed = time.monotonic() - getattr(self, "_export_started", time.monotonic())
+        percent = done * 100 // max(total, 1)
+        if done > 0:
+            eta = elapsed * (total - done) / done
+            self._export_status.setText(
+                f"导出中… {percent}%（已用 {_format_time(elapsed)}，约剩 {_format_time(eta)}）"
+            )
 
     def set_export_state(self, state: str, message: str = "") -> None:
-        """state: running / ok / fail。"""
+        """state: running / ok / fail。ok 时 message 为导出文件完整路径。"""
+        import time
+
         self._export_button.setEnabled(state != "running")
         if state == "running":
-            self._export_status.setText("导出中…")
+            self._export_started = time.monotonic()
+            self._export_status.setText("导出中… 0%")
             self._progress.setVisible(True)
         elif state == "ok":
-            self._export_status.setText("导出完成 ✓")
+            self._export_status.setText(f"导出完成 ✓\n{message}")
             self._progress.setVisible(False)
         elif state == "fail":
             self._export_status.setText(f"导出失败: {message}")

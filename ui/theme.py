@@ -124,4 +124,20 @@ QProgressBar {
     font-size: 11px;
 }
 QProgressBar::chunk { background: #2f6fed; border-radius: 5px; }
+
+/* 播放底栏 */
+QFrame#playerBar {
+    background-color: #16161d;
+    border-top: 1px solid #23232c;
+}
+QLabel[barTitle="true"] {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e8eaf2;
+}
+QPushButton:checked {
+    background-color: #232c45;
+    border-color: #2f6fed;
+    color: #ffffff;
+}
 """
