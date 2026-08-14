@@ -2,6 +2,7 @@
 
 职责：创建主窗口与音频引擎并完成装配；本模块不含渲染逻辑。
 阶段 3：加载演示音频并播放，向预览控件注入 AudioState 来源。
+阶段 4：注入波形采样来源（波形背景用）。
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ class ApplicationController:
         self.window = MainWindow()
         self.audio = AudioEngine()
         self.window.preview.set_audio_state_provider(self.audio.get_state)
+        self.window.preview.set_waveform_provider(self.audio.get_waveform)
 
         if DEMO_AUDIO.exists():
             try:

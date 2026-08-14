@@ -4,3 +4,4 @@ pygame
 numpy
 librosa
 soundfile
+Pillow

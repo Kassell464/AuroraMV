@@ -10,6 +10,9 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
+import numpy as np
+import numpy.typing as npt
+
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -19,6 +22,7 @@ from core.audio.state import AudioState
 from core.renderer.engine import Renderer
 
 AudioStateProvider = Callable[[], AudioState]
+WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 
 
 class PreviewWidget(QOpenGLWidget):
@@ -26,6 +30,7 @@ class PreviewWidget(QOpenGLWidget):
         self,
         parent: QWidget | None = None,
         audio_state_provider: AudioStateProvider | None = None,
+        waveform_provider: WaveformProvider | None = None,
     ) -> None:
         super().__init__(parent)
         self.setMinimumSize(640, 360)
@@ -39,6 +44,9 @@ class PreviewWidget(QOpenGLWidget):
 
         self.renderer = Renderer()
         self._audio_state_provider = audio_state_provider
+        self._waveform_provider = waveform_provider
+        if waveform_provider is not None:
+            self.renderer.set_waveform_provider(waveform_provider)
         self._start = time.perf_counter()
 
         self._timer = QTimer(self)
@@ -49,6 +57,11 @@ class PreviewWidget(QOpenGLWidget):
     def set_audio_state_provider(self, provider: AudioStateProvider) -> None:
         """注入音频状态来源（阶段 3：AudioEngine.get_state）。"""
         self._audio_state_provider = provider
+
+    def set_waveform_provider(self, provider: WaveformProvider) -> None:
+        """注入波形采样来源（阶段 4：AudioEngine.get_waveform）。"""
+        self._waveform_provider = provider
+        self.renderer.set_waveform_provider(provider)
 
     def initializeGL(self) -> None:
         self.renderer.initialize()

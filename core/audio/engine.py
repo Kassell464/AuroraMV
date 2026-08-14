@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 import time
 
+import numpy.typing as npt
+
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")  # 隐藏 pygame 启动提示
 
 import pygame.mixer  # noqa: E402
@@ -54,9 +56,16 @@ class AudioEngine:
 
     def get_state(self) -> AudioState:
         """当前播放位置的 AudioState。"""
+        return self._analyzer.get_state(self._position())
+
+    def get_waveform(self, n: int) -> npt.NDArray[np.float32]:
+        """当前播放位置往前 n 个波形采样（可视化背景用）。"""
+        return self._analyzer.get_waveform(self._position(), n)
+
+    def _position(self) -> float:
         position = 0.0
         if self._playing:
             position = pygame.mixer.music.get_pos() / 1000.0  # ms → s
             if position < 0:  # 部分后端可能返回 -1
                 position = self._clock() - self._play_started_at
-        return self._analyzer.get_state(position)
+        return position
