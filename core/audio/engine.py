@@ -26,6 +26,7 @@ class AudioEngine:
     def __init__(self) -> None:
         self._analyzer = AudioAnalyzer()
         self._playing = False
+        self._paused = False
         self._play_started_at = 0.0
         self._seek_origin = 0.0
         self._clock = time.monotonic
@@ -34,6 +35,11 @@ class AudioEngine:
     def is_playing(self) -> bool:
         """是否正在播放。"""
         return self._playing
+
+    @property
+    def is_paused(self) -> bool:
+        """是否处于暂停状态。"""
+        return self._paused
 
     @property
     def duration(self) -> float:
@@ -50,6 +56,7 @@ class AudioEngine:
         seconds = max(0.0, min(seconds, self.duration))
         pygame.mixer.music.play(0, start=seconds)
         self._playing = True
+        self._paused = False
         self._play_started_at = self._clock()
         self._seek_origin = seconds
 
@@ -62,17 +69,31 @@ class AudioEngine:
         pygame.mixer.music.load(path)
 
     def play(self) -> None:
-        """从头开始播放。"""
+        """继续播放：暂停中则续播，否则从头播放。"""
+        if self._paused:
+            pygame.mixer.music.unpause()
+            self._paused = False
+            self._playing = True
+            return
         pygame.mixer.music.play()
         self._playing = True
         self._play_started_at = self._clock()
         self._seek_origin = 0.0
 
+    def pause(self) -> None:
+        """暂停播放（保持位置，可续播）。"""
+        if self._playing:
+            pygame.mixer.music.pause()
+        self._paused = True
+        self._playing = False
+
     def stop(self) -> None:
-        """停止播放。"""
+        """停止播放（位置归零）。"""
         if pygame.mixer.get_init():
             pygame.mixer.music.stop()
         self._playing = False
+        self._paused = False
+        self._seek_origin = 0.0
 
     def get_state(self) -> AudioState:
         """当前播放位置的 AudioState。"""
@@ -83,11 +104,11 @@ class AudioEngine:
         return self._analyzer.get_waveform(self._position(), n)
 
     def _position(self) -> float:
-        position = 0.0
-        if self._playing:
-            position = pygame.mixer.music.get_pos() / 1000.0  # ms → s
-            if position < 0:  # 部分后端可能返回 -1
-                position = self._clock() - self._play_started_at + self._seek_origin
-            else:
-                position += self._seek_origin  # get_pos 不含 seek 偏移（实测）
+        if not (self._playing or self._paused):
+            return 0.0
+        position = pygame.mixer.music.get_pos() / 1000.0  # ms → s
+        if position < 0:  # 部分后端可能返回 -1
+            position = self._clock() - self._play_started_at + self._seek_origin
+        else:
+            position += self._seek_origin  # get_pos 不含 seek 偏移（实测）
         return position

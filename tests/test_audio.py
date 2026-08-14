@@ -61,5 +61,36 @@ class AudioAnalyzerTestCase(unittest.TestCase):
         self.assertFalse(self.analyzer.get_state(mid).beat)
 
 
+class AudioEnginePauseTestCase(unittest.TestCase):
+    """暂停后继续播放：进度保持，不从头（修复轮）。"""
+
+    def test_pause_resume_keeps_position(self) -> None:
+        import time
+
+        from core.audio.engine import AudioEngine
+
+        demo_wav = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "assets", "audio", "demo.wav",
+        )
+        if not os.path.exists(demo_wav):
+            self.skipTest("缺少演示音频")
+        engine = AudioEngine()
+        try:
+            engine.load(demo_wav)
+            engine.play()
+            time.sleep(0.6)
+            engine.pause()
+            paused_at = engine.position
+            self.assertGreater(paused_at, 0.3)
+            time.sleep(0.4)
+            self.assertAlmostEqual(engine.position, paused_at, delta=0.15)  # 暂停时位置不动
+            engine.play()  # 续播
+            time.sleep(0.4)
+            self.assertGreater(engine.position, paused_at)  # 继续前进而非从头
+        finally:
+            engine.stop()
+
+
 if __name__ == "__main__":
     unittest.main()

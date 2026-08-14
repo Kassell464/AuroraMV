@@ -47,6 +47,7 @@ class LyricsRenderer:
         self._program["u_text"].value = 0
         self._template = template if template is not None else DEFAULT_LYRIC_TEMPLATE
         self._font_path = resolve_font(self._template.font)
+        self._visible = True
         self._line: LyricLine | None = None
         self._alpha = 0.0
         self._scale = 1.0
@@ -60,6 +61,12 @@ class LyricsRenderer:
         self._font_path = resolve_font(template.font)
         self._cache.clear()  # 颜色/描边变化 → 清空纹理缓存
 
+    def set_visible(self, visible: bool) -> None:
+        """歌词开关。"""
+        self._visible = visible
+        if not visible:
+            self._line = None
+
     def update(
         self,
         time: float,
@@ -68,7 +75,8 @@ class LyricsRenderer:
     ) -> None:
         """更新歌词状态。time 为音乐时间（秒）。"""
         self._line = line
-        if line is None:
+        if line is None or not self._visible:
+            self._line = None
             return
         animation = self._template.animation
 
@@ -89,7 +97,7 @@ class LyricsRenderer:
 
     def render(self, screen_width: int, screen_height: int) -> None:
         """把当前歌词行画到屏幕（alpha 混合）。"""
-        if self._line is None or self._alpha <= 0.01:
+        if self._line is None or self._alpha <= 0.01 or not self._visible:
             return
         texture, size = self._get_texture(self._line)
         if texture is None:
@@ -101,7 +109,8 @@ class LyricsRenderer:
             factor = 0.45 / half_x
             half_x *= factor
             half_y *= factor
-        self._program["u_center"].value = (0.0, -0.42 + self._rise)
+        # 歌词位于画面上方（不被粒子/圆形遮挡）
+        self._program["u_center"].value = (0.0, 0.38 + self._rise)
         self._program["u_half_size"].value = (half_x, half_y)
         self._program["u_alpha"].value = self._alpha
         self._ctx.enable(moderngl.BLEND)

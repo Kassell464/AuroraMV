@@ -95,12 +95,16 @@ class ApplicationController:
         self.window.panel.set_presets(self.presets)
         self.window.panel.preset_selected.connect(self._on_preset_selected)
         self.window.panel.effect_param_changed.connect(self._on_effect_param)
-        self.window.panel.play_pause_requested.connect(self._on_play_pause)
         self.window.panel.export_requested.connect(self._on_export)
-        self.window.panel.seek_requested.connect(self._on_seek)
         self.window.panel.audio_file_selected.connect(self._on_audio_file)
         self.window.panel.lrc_file_selected.connect(self._on_lrc_file)
-        self.window.panel.set_playing(self.audio.is_playing)
+
+        # 播放底栏
+        self.window.bar.seek_requested.connect(self._on_seek)
+        self.window.bar.play_pause_requested.connect(self._on_play_pause)
+        self.window.bar.lyrics_toggled.connect(self._on_lyrics_toggled)
+        self.window.bar.set_playing(self.audio.is_playing)
+        self._update_track_info()
 
         # 进度轮询（拖动进度条期间不覆盖）
         self._progress_timer = QTimer()  # 控制器非 QObject，不能作 parent
@@ -145,17 +149,26 @@ class ApplicationController:
 
     def _on_play_pause(self) -> None:
         if self.audio.is_playing:
-            self.audio.stop()
+            self.audio.pause()
         else:
-            self.audio.play()
-        self.window.panel.set_playing(self.audio.is_playing)
+            self.audio.play()  # 暂停中则续播，否则从头
+        self.window.bar.set_playing(self.audio.is_playing)
 
     def _update_progress(self) -> None:
-        self.window.panel.set_progress(self.audio.position, self.audio.duration)
+        self.window.bar.set_progress(self.audio.position, self.audio.duration)
+
+    def _update_track_info(self) -> None:
+        """底栏显示当前歌曲名与歌词名。"""
+        title = Path(self.audio_path).stem if self.audio_path else "—"
+        subtitle = f"歌词：{Path(self.lrc_path).name}" if self.lrc_path else "无歌词"
+        self.window.bar.set_track(title, subtitle)
 
     def _on_seek(self, seconds: float) -> None:
         self.audio.seek(seconds)
-        self.window.panel.set_playing(True)
+        self.window.bar.set_playing(True)
+
+    def _on_lyrics_toggled(self, enabled: bool) -> None:
+        self.window.preview.renderer.set_lyrics_visible(enabled)
 
     def _on_audio_file(self, path: str) -> None:
         try:
@@ -165,13 +178,15 @@ class ApplicationController:
             self._selected_preset = None
             self.window.panel.select_preset("auto")
             self._setup_scenes()
-            self.window.panel.set_playing(True)
+            self.window.bar.set_playing(True)
+            self._update_track_info()
         except Exception as exc:
             self.window.panel.set_export_state("fail", f"音频加载失败: {exc}")
 
     def _on_lrc_file(self, path: str) -> None:
         self.lrc_path = path
         self.window.preview.renderer.set_lyrics_provider(LRCProvider(path))
+        self._update_track_info()
 
     def _on_export(self, settings: ExportSettings, output: str) -> None:
         if not output:
@@ -198,7 +213,9 @@ class ApplicationController:
         self.window.panel.set_export_state("running")
         worker = ExportWorker(project, settings, output, self)
         worker.progress.connect(self.window.panel.set_export_progress)
-        worker.finished_ok.connect(lambda _: self.window.panel.set_export_state("ok"))
+        worker.finished_ok.connect(
+            lambda path: self.window.panel.set_export_state("ok", path)
+        )
         worker.failed.connect(lambda msg: self.window.panel.set_export_state("fail", msg))
         worker.finished.connect(worker.deleteLater)
         self._export_worker = worker
