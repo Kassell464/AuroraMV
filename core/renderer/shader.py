@@ -30,6 +30,32 @@ void main() {
 }
 """
 
+# 屏幕空间圆形（阶段 3 音频响应演示：u_radius 由低频驱动）
+CIRCLE_VERTEX_SHADER = """
+#version 330
+in vec3 in_position;
+in vec2 in_uv;
+out vec2 v_uv;
+void main() {
+    v_uv = in_uv;
+    gl_Position = vec4(in_position, 1.0);
+}
+"""
+
+CIRCLE_FRAGMENT_SHADER = """
+#version 330
+in vec2 v_uv;
+uniform float u_radius;  // 0.0 .. 0.5
+uniform vec3 u_color;
+out vec4 fragColor;
+void main() {
+    float d = distance(v_uv, vec2(0.5, 0.5));
+    float edge = fwidth(d) * 1.5 + 0.002;
+    float alpha = 1.0 - smoothstep(u_radius - edge, u_radius + edge, d);
+    fragColor = vec4(u_color, alpha);
+}
+"""
+
 
 class ShaderError(RuntimeError):
     """着色器编译或链接失败。"""
