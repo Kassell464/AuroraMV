@@ -1,0 +1,4 @@
+{
+  "type": "galaxy",
+  "params": {"spin_speed": 0.7, "star_brightness": 1.2, "star_density": 0.9, "arm_color": [0.35, 0.25, 0.7]}
+}

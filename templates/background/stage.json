@@ -1,0 +1,4 @@
+{
+  "type": "neon_grid",
+  "params": {"color": [0.1, 0.9, 1.0], "speed": 1.0}
+}

@@ -1,0 +1,6 @@
+{
+  "name": "dj",
+  "background": {"template": "dj"},
+  "lyrics": {"template": "minimal"},
+  "effects": ["beat_shake", "flash", "particle"]
+}

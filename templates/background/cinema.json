@@ -1,0 +1,5 @@
+{
+  "type": "image",
+  "path": "assets/backgrounds/nebula.jpg",
+  "params": {"zoom_speed": 0.4, "zoom_amount": 0.12, "pan": null, "tint": [1.0, 0.95, 0.88]}
+}
