@@ -103,6 +103,10 @@ class AudioEngine:
         """当前播放位置往前 n 个波形采样（可视化背景用）。"""
         return self._analyzer.get_waveform(self._position(), n)
 
+    def get_spectrum(self, n: int = 64) -> npt.NDArray[np.float32]:
+        """当前播放位置的频谱（对数频段，可视化背景用）。"""
+        return self._analyzer.get_spectrum(self._position(), n)
+
     def _position(self) -> float:
         if not (self._playing or self._paused):
             return 0.0

@@ -110,6 +110,38 @@ class BackgroundTemplateGLTestCase(unittest.TestCase):
         self.assertGreater(int(frame.max()), 5)
         galaxy.release()
 
+    def test_new_visual_backgrounds_render(self) -> None:
+        """MineRadio 概念灵感背景（黑胶/星球/隧道/频谱）均能绘制一帧。"""
+        from core.renderer.background import create_background
+
+        for kind in ("vinyl", "planet", "tunnel", "spectrum"):
+            with self.subTest(kind=kind):
+                bg = create_background(self.ctx, kind)
+                frame = self._render(bg)
+                self.assertGreater(int(frame.max()), 5, f"{kind} 不应为纯黑")
+                bg.release()
+
+    def test_vinyl_accepts_cover(self) -> None:
+        """黑胶背景可注入封面纹理（封面导入功能）。"""
+        import numpy as np
+        from PIL import Image
+
+        from core.renderer.background import create_background
+        from core.renderer.texture import upload_texture
+
+        cover = np.zeros((32, 32, 4), dtype=np.uint8)
+        cover[..., 0] = 255  # 红色封面
+        cover[..., 3] = 255
+        texture = upload_texture(self.ctx, cover)
+        bg = create_background(self.ctx, "vinyl")
+        bg.set_cover(texture)
+        frame = self._render(bg)
+        # 红色封面应让封面环区域偏红（避开中心唱盘孔，取偏 4 像素处）
+        center = frame[32, 36].astype(np.int64)
+        self.assertGreater(center[0], center[2])
+        texture.release()
+        bg.release()
+
 
 class PresetPackTestCase(unittest.TestCase):
     def test_six_systematic_preset_packs(self) -> None:
@@ -117,7 +149,13 @@ class PresetPackTestCase(unittest.TestCase):
 
         presets = load_scene_presets(os.path.join(TEMPLATES_DIR, "scene"))
         names = {p.name for p in presets}
-        self.assertEqual(names, {"cinema", "aurora", "cyberpunk", "stage", "synthwave", "dj"})
+        self.assertEqual(
+            names,
+            {
+                "cinema", "aurora", "cyberpunk", "stage", "synthwave", "dj",
+                "vinyl", "planet", "tunnel", "spectrum",
+            },
+        )
 
     def test_presets_resolve_background_templates(self) -> None:
         from core.renderer.scene import load_scene_presets

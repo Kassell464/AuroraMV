@@ -93,7 +93,7 @@ void main() {
         float h = hash(id);
         if (h > u_star_density) {
             float d = length(f);
-            float s = smoothstep(0.14, 0.0, d);
+            float s = 1.0 - smoothstep(0.0, 0.14, d);
             float tw = 0.5 + 0.5 * sin(u_time * (2.0 + 3.0 * u_bass) + h * 60.0);
             stars += s * tw * (0.35 + u_bass) / scale;
         }
@@ -123,7 +123,7 @@ void main() {
     float s = texture(u_wave, vec2(v_uv.x, 0.5)).r;
     float y = s * 0.4 + 0.5;
     float d = abs(v_uv.y - y);
-    float line = smoothstep(0.03, 0.0, d);
+    float line = 1.0 - smoothstep(0.0, 0.03, d);
     float fill = step(v_uv.y, y);
     float glow = exp(-d * 25.0) * 0.6;
     float pulse = 0.85 + 0.15 * sin(u_time * 3.0);
@@ -159,7 +159,7 @@ void main() {
 
     vec2 f = abs(fract(g) - 0.5);
     float line = min(f.x, f.y);
-    float grid = smoothstep(0.09, 0.0, line) * min(1.0, 1.0 / (depth * 0.5));
+    float grid = (1.0 - smoothstep(0.0, 0.09, line)) * min(1.0, 1.0 / (depth * 0.5));
 
     float glow = exp(-abs(p.y - horizon) * 6.0);
     vec3 col = u_color * (grid * (0.4 + u_bass * 1.5) + glow * (0.25 + u_flash * 0.8));
@@ -218,7 +218,7 @@ out vec4 fragColor;
 void main() {
     vec2 p = gl_PointCoord - 0.5;
     float d = length(p);
-    float a = smoothstep(0.5, 0.15, d) * v_life;
+    float a = (1.0 - smoothstep(0.15, 0.5, d)) * v_life;
     fragColor = vec4(u_color, a);
 }
 """
@@ -236,6 +236,157 @@ void main() {
     vec2 uv = v_uv + u_offset;
     vec3 col = texture(u_scene, uv).rgb;
     col += u_flash_color * u_flash;
+    fragColor = vec4(col, 1.0);
+}
+"""
+
+
+# 黑胶唱片（MineRadio 概念灵感）：旋转盘体 + 沟槽 + 圆形专辑封面
+VINYL_FRAGMENT_SHADER = """
+#version 330
+in vec2 v_uv;
+uniform float u_time;
+uniform float u_bass;
+uniform float u_aspect;
+uniform sampler2D u_cover;
+uniform float u_has_cover;
+uniform vec3 u_label_color;
+out vec4 fragColor;
+
+void main() {
+    vec2 p = (v_uv - 0.5) * 2.0;
+    p.x *= u_aspect;
+    float r = length(p);
+    float ang = atan(p.y, p.x);
+
+    vec3 bg = vec3(0.015, 0.015, 0.03);
+    vec3 col = bg;
+
+    // 盘体 + 沟槽（转速随低频）
+    float disc = (1.0 - smoothstep(0.90, 0.94, r)) * smoothstep(0.30, 0.34, r);
+    float rot = ang + u_time * (0.25 + u_bass * 1.0);
+    float grooves = 0.5 + 0.5 * sin(r * 240.0 + sin(rot * 2.0) * 1.5);
+    vec3 vinyl_col = vec3(0.05, 0.05, 0.07) + smoothstep(0.55, 1.0, grooves) * vec3(0.055);
+    float shine = smoothstep(0.75, 1.0, sin(rot + 1.3)) * (1.0 - smoothstep(0.32, 0.95, r)) * 0.4;
+    col += disc * (vinyl_col + shine * vec3(0.85, 0.88, 0.95));
+
+    // 中心封面（随盘旋转；无封面时显示标签色）
+    float cover_r = 0.26;
+    float inside = 1.0 - smoothstep(cover_r, cover_r + 0.015, r);
+    if (inside > 0.0) {
+        float cr = cover_r * 2.0;
+        vec2 q = vec2(p.x * cos(-rot) - p.y * sin(-rot), p.x * sin(-rot) + p.y * cos(-rot));
+        vec2 cuv = q / cr + 0.5;
+        vec3 cover = u_has_cover > 0.5 ? texture(u_cover, cuv).rgb : u_label_color;
+        col = mix(col, cover, inside);
+    }
+
+    // 中心孔
+    col = mix(col, bg, 1.0 - smoothstep(0.0, 0.015, r));
+    fragColor = vec4(col, 1.0);
+}
+"""
+
+# 星球（MineRadio 概念灵感）：球体着色器 + 云带 + 边缘光
+PLANET_FRAGMENT_SHADER = """
+#version 330
+in vec2 v_uv;
+uniform float u_time;
+uniform float u_bass;
+uniform float u_aspect;
+uniform float u_speed;
+uniform vec3 u_color_a;
+uniform vec3 u_color_b;
+out vec4 fragColor;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+void main() {
+    vec2 p = (v_uv - 0.5) * 2.0;
+    p.x *= u_aspect;
+    vec3 ro = vec3(0.0, 0.0, 2.4);
+    vec3 rd = normalize(vec3(p, -1.8));
+    float radius = 0.62;
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - radius * radius;
+    float h = b * b - c;
+    if (h < 0.0) {
+        vec2 g = p * 5.0;
+        float star = step(0.965, hash(floor(g)));
+        fragColor = vec4(vec3(0.01, 0.01, 0.035) + star * vec3(0.55, 0.6, 0.75), 1.0);
+        return;
+    }
+    float t = -b - sqrt(h);
+    vec3 pos = ro + rd * t;
+    vec3 n = normalize(pos);
+    float lon = atan(n.z, n.x) + u_time * (0.12 + u_bass * 0.25) * u_speed;
+    float lat = asin(clamp(n.y, -1.0, 1.0));
+    float bands = 0.5 + 0.5 * sin(lat * 11.0 + sin(lon * 2.0 + lat * 6.0) * 2.5);
+    vec3 albedo = mix(u_color_a, u_color_b, bands);
+    vec3 light = normalize(vec3(0.6, 0.4, -0.7));
+    float diff = max(dot(n, light), 0.0);
+    float rim = pow(1.0 - abs(dot(n, normalize(-rd))), 2.2);
+    vec3 col = albedo * (0.22 + diff * 0.95) + rim * u_color_b * 0.55;
+    fragColor = vec4(col, 1.0);
+}
+"""
+
+# 滚筒隧道（MineRadio 概念灵感）：沉浸隧道 + 节拍脉冲
+TUNNEL_FRAGMENT_SHADER = """
+#version 330
+in vec2 v_uv;
+uniform float u_time;
+uniform float u_bass;
+uniform float u_flash;
+uniform float u_aspect;
+uniform vec3 u_color;
+out vec4 fragColor;
+
+void main() {
+    vec2 p = (v_uv - 0.5) * 2.0;
+    p.x *= u_aspect;
+    p *= 1.0 + u_flash * 0.1;
+
+    float speed = 0.6 + u_bass * 1.8;
+    float t = u_time * speed;
+    float depth = 1.0 / max(length(p), 0.015);
+    float ang = atan(p.y, p.x) + t * 0.6;
+
+    float rings = abs(fract(depth * 0.5 + t * 0.25) - 0.5);
+    float ring = 1.0 - smoothstep(0.0, 0.18, rings);
+    float spokes = abs(fract(ang / 0.785) - 0.5);
+    float spoke = (1.0 - smoothstep(0.0, 0.16, spokes)) * 0.6;
+
+    float fade = exp(-depth * 0.5);
+    vec3 col = vec3(0.01, 0.01, 0.03);
+    col += u_color * (ring * 1.4 + spoke * 0.8) * fade * (0.5 + u_bass * 1.2);
+    col += u_color * u_flash * 0.12;
+    fragColor = vec4(col, 1.0);
+}
+"""
+
+# 音域回响（MineRadio 概念灵感）：频谱地形高度图（真实 FFT 数据）
+SPECTRUM_FRAGMENT_SHADER = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_spectrum;
+uniform float u_bass;
+uniform float u_time;
+uniform vec3 u_color;
+out vec4 fragColor;
+
+void main() {
+    float m = texture(u_spectrum, vec2(v_uv.x, 0.5)).r;
+    float y = 0.14 + m * 0.72;
+    float line = 1.0 - smoothstep(0.0, 0.012, abs(v_uv.y - y));
+    float fill = (1.0 - smoothstep(0.0, 0.03, y - v_uv.y)) * 0.10;
+    float glow = exp(-abs(v_uv.y - y) * 22.0) * 0.35;
+    float grid = (1.0 - smoothstep(0.0, 0.02, abs(fract(v_uv.x * 16.0) - 0.5))) * 0.05;
+    grid += (1.0 - smoothstep(0.0, 0.02, abs(fract(v_uv.y * 8.0) - 0.5))) * 0.05;
+
+    vec3 col = vec3(0.015, 0.02, 0.04);
+    col += u_color * (line * 1.5 + fill + glow) * (0.6 + u_bass * 0.8);
+    col += u_color * grid * (0.35 + u_bass * 0.6);
     fragColor = vec4(col, 1.0);
 }
 """

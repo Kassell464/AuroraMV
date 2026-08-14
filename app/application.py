@@ -70,6 +70,7 @@ class ApplicationController:
         self.audio = AudioEngine()
         self.window.preview.set_audio_state_provider(self.audio.get_state)
         self.window.preview.set_waveform_provider(self.audio.get_waveform)
+        self.window.preview.set_spectrum_provider(self.audio.get_spectrum)
 
         self.lrc_path = lrc_path
         self.scenes: list[Scene] = []
@@ -98,6 +99,7 @@ class ApplicationController:
         self.window.panel.export_requested.connect(self._on_export)
         self.window.panel.audio_file_selected.connect(self._on_audio_file)
         self.window.panel.lrc_file_selected.connect(self._on_lrc_file)
+        self.window.panel.cover_file_selected.connect(self._on_cover_file)
 
         # 播放底栏
         self.window.bar.seek_requested.connect(self._on_seek)
@@ -187,6 +189,13 @@ class ApplicationController:
         self.lrc_path = path
         self.window.preview.renderer.set_lyrics_provider(LRCProvider(path))
         self._update_track_info()
+
+    def _on_cover_file(self, path: str) -> None:
+        """导入专辑封面（黑胶唱片/封面粒子背景使用）。"""
+        try:
+            self.window.preview.renderer.set_cover_image(path)
+        except Exception as exc:
+            self.window.panel.set_export_state("fail", f"封面加载失败: {exc}")
 
     def _on_export(self, settings: ExportSettings, output: str) -> None:
         if not output:

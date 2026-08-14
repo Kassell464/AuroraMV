@@ -38,6 +38,10 @@ PRESET_DISPLAY = {
     "stage": ("歌词舞台", "青色网格 · 节拍闪光", "#19e6ff"),
     "synthwave": ("合成波", "橙红网格 · 复古", "#ff7433"),
     "dj": ("DJ 现场", "波形 · 粒子风暴", "#4de6ff"),
+    "vinyl": ("黑胶唱片", "旋转唱片 · 圆形封面", "#d8d8e0"),
+    "planet": ("星球", "雕塑球体 · 边缘光", "#7fb2ff"),
+    "tunnel": ("滚筒隧道", "沉浸隧道 · 节拍脉冲", "#ff6ac1"),
+    "spectrum": ("音域回响", "频谱地形 · 实时", "#39f0c0"),
 }
 
 _RESOLUTIONS = ("360p", "480p", "720p", "1080p", "1440p")
@@ -108,6 +112,7 @@ class ControlPanel(QFrame):
     export_requested = Signal(object, str)  # (ExportSettings, 输出路径)
     audio_file_selected = Signal(str)
     lrc_file_selected = Signal(str)
+    cover_file_selected = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -213,8 +218,11 @@ class ControlPanel(QFrame):
         self._audio_button.clicked.connect(self._import_audio)
         self._lrc_button = QPushButton("打开歌词", content)
         self._lrc_button.clicked.connect(self._import_lrc)
+        self._cover_button = QPushButton("封面", content)
+        self._cover_button.clicked.connect(self._import_cover)
         import_row.addWidget(self._audio_button, 1)
         import_row.addWidget(self._lrc_button, 1)
+        import_row.addWidget(self._cover_button, 1)
         layout.addLayout(import_row)
 
         layout.addStretch(1)
@@ -291,6 +299,13 @@ class ControlPanel(QFrame):
         path, _ = QFileDialog.getOpenFileName(self, "选择歌词", "", "歌词 (*.lrc)")
         if path:
             self.lrc_file_selected.emit(path)
+
+    def _import_cover(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择专辑封面", "", "图片 (*.jpg *.jpeg *.png *.webp)"
+        )
+        if path:
+            self.cover_file_selected.emit(path)
 
     def _browse_output(self) -> None:
         fmt = self._format_combo.currentText()

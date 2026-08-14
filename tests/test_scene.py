@@ -72,13 +72,19 @@ class ScenePresetTestCase(unittest.TestCase):
     def test_loads_all_presets(self) -> None:
         presets = load_scene_presets(PRESETS_DIR)
         names = {p.name for p in presets}
-        for expected in ("cinema", "aurora", "cyberpunk", "stage", "synthwave", "dj"):
+        for expected in (
+            "cinema", "aurora", "cyberpunk", "stage", "synthwave", "dj",
+            "vinyl", "planet", "tunnel", "spectrum",
+        ):
             self.assertIn(expected, names)
 
     def test_presets_have_background_kinds(self) -> None:
         presets = load_scene_presets(PRESETS_DIR)
         kinds = {p.background.kind for p in presets}
-        self.assertEqual(kinds, {"image", "galaxy", "neon_grid", "waveform"})
+        self.assertEqual(
+            kinds,
+            {"image", "galaxy", "neon_grid", "waveform", "vinyl", "planet", "tunnel", "spectrum"},
+        )
 
     def test_scenes_from_presets_divides_duration(self) -> None:
         presets = load_scene_presets(PRESETS_DIR)

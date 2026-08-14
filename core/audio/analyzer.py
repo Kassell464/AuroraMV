@@ -24,6 +24,9 @@ _BANDS = (
     ("treble", 2000.0, 8000.0),
 )
 
+# 频谱地形可视化：对数频段数量
+_SPECTRUM_BANDS = 64
+
 
 class AudioLoadError(RuntimeError):
     """音频加载或分析失败。"""
@@ -44,6 +47,7 @@ class AudioAnalyzer:
         self._bpm = 0.0
         self._wave = np.zeros(0, dtype=np.float32)
         self._wave_sr = 0.0
+        self._spectrum = np.zeros((0, _SPECTRUM_BANDS), dtype=np.float32)
 
     @property
     def duration(self) -> float:
@@ -95,6 +99,28 @@ class AudioAnalyzer:
         out[n - segment.size:] = segment
         return out
 
+    def get_spectrum(
+        self, time: float, n_bands: int = _SPECTRUM_BANDS
+    ) -> npt.NDArray[np.float32]:
+        """返回给定时刻的对数频段频谱（帧间线性插值，可视化用）。"""
+        if self._spectrum.shape[0] == 0 or n_bands <= 0:
+            return np.zeros(max(n_bands, 0), dtype=np.float32)
+        t = max(0.0, min(time, self._duration))
+        idx = int(np.searchsorted(self._times, t))
+        lo = max(idx - 1, 0)
+        hi = min(idx, self._spectrum.shape[0] - 1)
+        span = float(self._times[hi] - self._times[lo])
+        frac = 0.0 if span <= 0.0 else (t - float(self._times[lo])) / span
+        frac = min(max(frac, 0.0), 1.0)
+        out = self._spectrum[lo] * (1.0 - frac) + self._spectrum[hi] * frac
+        if n_bands != _SPECTRUM_BANDS:
+            out = np.interp(
+                np.linspace(0.0, 1.0, n_bands),
+                np.linspace(0.0, 1.0, _SPECTRUM_BANDS),
+                out,
+            )
+        return out.astype(np.float32)
+
     # ---------- 内部实现 ----------
 
     def _analyze(self, y: npt.NDArray[np.float32], sr: int) -> None:
@@ -119,6 +145,17 @@ class AudioAnalyzer:
         self._bands = {name: _normalize(bands[name]) for name, _, _ in _BANDS}
         self._bpm, self._beat_times = detect_beats(y, sr)
         self._duration = float(len(y)) / float(sr)
+
+        # 对数频段频谱（可视化地形用，如「音域回响」）
+        edges = np.geomspace(40.0, 8000.0, _SPECTRUM_BANDS + 1)
+        spectrum = np.zeros((n_frames, _SPECTRUM_BANDS), dtype=np.float32)
+        for i in range(_SPECTRUM_BANDS):
+            mask = (freqs >= edges[i]) & (freqs < edges[i + 1])
+            if mask.any():
+                spectrum[:, i] = stft[mask].sum(axis=0)
+        peak = spectrum.max(axis=0, keepdims=True)
+        peak[peak == 0.0] = 1.0
+        self._spectrum = (spectrum / peak).astype(np.float32)
 
         # 可视化波形：降采样存储（约 4kHz）
         factor = max(1, sr // 4000)
