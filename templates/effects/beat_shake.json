@@ -1,0 +1,5 @@
+{
+  "name": "beat_shake",
+  "type": "beat_shake",
+  "params": {"strength": 0.03, "duration": 0.3, "decay": 6.0, "frequency": 12.0}
+}

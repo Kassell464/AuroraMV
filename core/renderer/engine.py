@@ -38,12 +38,16 @@ from core.renderer.camera import Camera
 from core.renderer.shader import (
     CIRCLE_FRAGMENT_SHADER,
     FULLSCREEN_VERTEX_SHADER,
+    POST_FRAGMENT_SHADER,
     create_program,
 )
 from core.renderer.scene import Scene, SceneManager
 from core.lyrics.provider import LyricsProvider
 from core.lyrics.template import load_lyric_template
 from core.renderer.lyrics import DEFAULT_LYRIC_TEMPLATE, LyricsRenderer
+from core.effects.effect import PostState
+from core.effects.manager import EffectManager, create_effect
+from core.effects.template import load_effect_spec
 
 WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 
@@ -54,6 +58,9 @@ WAVEFORM_SAMPLES = 512
 
 # 歌词模板目录（templates/lyrics）
 LYRICS_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates" / "lyrics"
+
+# 效果模板目录（templates/effects）
+EFFECTS_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates" / "effects"
 
 
 class Renderer:
@@ -70,6 +77,12 @@ class Renderer:
         self._active_scene: Scene | None = None
         self.lyrics: LyricsRenderer | None = None
         self._lyrics_provider: LyricsProvider | None = None
+        self.effects = EffectManager()
+        self._post_state = PostState()
+        self._scene_texture: moderngl.Texture | None = None
+        self._scene_fbo: moderngl.Framebuffer | None = None
+        self._post_program: moderngl.Program | None = None
+        self._post_vao: moderngl.VertexArray | None = None
         self._waveform_provider: WaveformProvider | None = None
         self._width = 1280
         self._height = 720
@@ -106,6 +119,21 @@ class Renderer:
         # 歌词渲染器（阶段 6，Layer 3）
         self.lyrics = LyricsRenderer(self.ctx)
 
+        # 后期处理管线（阶段 7：震动偏移 + 闪光）
+        self._post_program = create_program(
+            self.ctx, FULLSCREEN_VERTEX_SHADER, POST_FRAGMENT_SHADER
+        )
+        self._post_program["u_scene"].value = 0
+        self._post_vao = self.ctx.vertex_array(
+            self._post_program,
+            [
+                (vbo_positions, "3f", "in_position"),
+                (vbo_uvs, "2f", "in_uv"),
+            ],
+            ibo,
+        )
+        self._create_scene_fbo()
+
     def set_background(self, kind: str, source: str | None = None) -> None:
         """切换背景（阶段 4）。kind: image / galaxy / waveform / neon_grid。"""
         assert self.ctx is not None, "请先调用 initialize()"
@@ -130,11 +158,13 @@ class Renderer:
             self.set_background("galaxy")
             self._active_scene = None
             self.set_lyric_template(None)
+            self.effects.clear()
             return
         self.set_background(scene.background.kind, scene.background.source)
         self._active_scene = scene
         if scene.lyric_template:
             self.set_lyric_template(scene.lyric_template)
+        self._load_effects(scene.effects)
 
     def set_lyrics_provider(self, provider: LyricsProvider | None) -> None:
         """注入歌词提供器（阶段 6）。"""
@@ -153,6 +183,17 @@ class Renderer:
         path = LYRICS_TEMPLATES_DIR / f"{name}.json"
         if path.exists():
             self.lyrics.set_template(load_lyric_template(str(path)))
+
+    def _load_effects(self, names: list[str]) -> None:
+        """按场景效果名从模板加载效果（阶段 7）。"""
+        self.effects.clear()
+        if self.ctx is None:
+            return
+        for name in names:
+            path = EFFECTS_TEMPLATES_DIR / f"{name}.json"
+            if not path.exists():
+                continue
+            self.effects.add(create_effect(self.ctx, load_effect_spec(str(path))))
 
     def update(self, time: float, audio_state: AudioState | None = None) -> None:
         """更新帧状态：摄像机、圆形半径、背景、场景、歌词。"""
@@ -179,6 +220,9 @@ class Renderer:
         if self.lyrics is not None:
             self.lyrics.update(music_time, line, audio_state)
 
+        self._post_state.reset()
+        self.effects.update(music_time, audio_state, self._post_state)
+
     def _update_scene(self, music_time: float) -> None:
         """按音乐时间自动切换场景（阶段 5）。"""
         if self._scene_manager is None:
@@ -191,17 +235,21 @@ class Renderer:
         if scene is not None:
             self.load_scene(scene)
 
-    def render(self) -> None:
-        """渲染一帧：清屏 → 背景（Layer 0）→ 音频响应圆形。"""
+    def render(self, target: moderngl.Framebuffer | None = None) -> None:
+        """渲染一帧：场景（背景/粒子/歌词/圆形）→ 后期处理（震动/闪光）。"""
         assert self.ctx is not None
         assert self.circle_program is not None and self.circle_vao is not None
         assert self.background is not None
+        assert self._scene_fbo is not None and self._scene_texture is not None
+        assert self._post_program is not None and self._post_vao is not None
 
+        # 1) 场景渲染到离屏帧缓冲
+        self._scene_fbo.use()
         self.ctx.viewport = (0, 0, self._width, self._height)
         self.ctx.clear(0.03, 0.03, 0.06, 1.0)
 
         self.background.render()
-
+        self.effects.render()
         if self.lyrics is not None:
             self.lyrics.render(self._width, self._height)
 
@@ -209,6 +257,30 @@ class Renderer:
         self.ctx.enable(moderngl.BLEND)
         self.circle_vao.render(moderngl.TRIANGLES)
         self.ctx.disable(moderngl.BLEND)
+
+        # 2) 后期处理：震动偏移 + 闪光叠加
+        out = target if target is not None else self.ctx.screen
+        out.use()
+        self.ctx.viewport = (0, 0, self._width, self._height)
+        self._scene_texture.use(0)
+        self._post_program["u_offset"].value = (
+            float(self._post_state.offset[0]),
+            float(self._post_state.offset[1]),
+        )
+        self._post_program["u_flash"].value = self._post_state.flash
+        self._post_program["u_flash_color"].value = (
+            float(self._post_state.flash_color[0]),
+            float(self._post_state.flash_color[1]),
+            float(self._post_state.flash_color[2]),
+        )
+        self._post_vao.render(moderngl.TRIANGLES)
+
+    def _create_scene_fbo(self) -> None:
+        """（重新）创建与视口同尺寸的离屏场景缓冲。"""
+        assert self.ctx is not None
+        self._scene_texture = self.ctx.texture((self._width, self._height), 4)
+        self._scene_texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        self._scene_fbo = self.ctx.framebuffer(color_attachments=[self._scene_texture])
 
     def resize(self, width: int, height: int) -> None:
         """更新视口尺寸与摄像机宽高比。"""
@@ -219,3 +291,5 @@ class Renderer:
         self.camera.set_aspect(self._width / self._height)
         if self.background is not None:
             self.background.set_aspect(self._width / self._height)
+        if self.ctx is not None and self._scene_fbo is not None:
+            self._create_scene_fbo()

@@ -1,0 +1,5 @@
+{
+  "name": "flash",
+  "type": "flash",
+  "params": {"color": [1.0, 1.0, 1.0], "intensity": 0.3, "duration": 0.2, "decay": 9.0, "trigger": "beat"}
+}
