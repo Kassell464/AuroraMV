@@ -85,4 +85,7 @@ class PreviewWidget(QOpenGLWidget):
         self.renderer.render(target=target)
 
     def resizeGL(self, width: int, height: int) -> None:
-        self.renderer.resize(width, height)
+        # 使用物理像素（含设备像素比）：Qt 内部帧缓冲按物理像素分配，
+        # 尺寸不一致时画面只会铺满左下角。
+        scale = self.devicePixelRatioF()
+        self.renderer.resize(max(1, int(width * scale)), max(1, int(height * scale)))

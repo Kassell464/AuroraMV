@@ -6,6 +6,8 @@ Effect 负责所有非核心视觉效果（闪光 / 震动 / 故障 / 粒子…�
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 
 from core.audio.state import AudioState
@@ -32,6 +34,27 @@ class Effect:
 
     def __init__(self) -> None:
         self._last_time = 0.0
+        self._last_wall = time.monotonic()
+
+    def _wall_dt(self) -> float:
+        """真实时间增量（秒，上限 0.1）。"""
+        now = time.monotonic()
+        dt = min(max(0.0, now - self._last_wall), 0.1)
+        self._last_wall = now
+        return dt
+
+    def _effect_dt(self, time: float) -> float:
+        """效果时间增量。
+
+        优先用音乐时间（播放/导出时逐帧推进，保证导出与预览一致）；
+        音乐时间冻结或回跳（暂停/seek）时退回真实时钟，
+        保证衰减不随音乐时间一起冻结。
+        """
+        music_dt = time - self._last_time
+        self._last_time = time
+        if 0.0 < music_dt <= 0.1:
+            return music_dt
+        return self._wall_dt()
 
     def update(
         self,
