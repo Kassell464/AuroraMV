@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from core.audio.state import AudioState
 from core.lyrics.parser import LyricLine
-from core.lyrics.template import LyricTemplate, resolve_font
+from core.lyrics.template import LyricAnimation, LyricTemplate, resolve_font
 from core.renderer.shader import (
     LYRIC_FRAGMENT_SHADER,
     LYRIC_VERTEX_SHADER,
@@ -29,10 +29,17 @@ FONT_SIZE = 56
 STROKE_WIDTH = 6
 ENTER_DURATION = 0.35
 EXIT_DURATION = 0.3
-BEAT_SCALE = 0.06
+BEAT_SCALE = 0.09
+BEAT_ALPHA_BOOST = 0.35
 CACHE_LIMIT = 64
 
-DEFAULT_LYRIC_TEMPLATE = LyricTemplate(name="minimal")
+# 默认歌词模板（与 templates/lyrics/minimal.json 一致，带节拍动效）
+DEFAULT_LYRIC_TEMPLATE = LyricTemplate(
+    name="minimal",
+    color=(0.878, 0.878, 0.878),  # #e0e0e0
+    glow=(0.878, 0.878, 0.878),
+    animation=LyricAnimation(enter="fade", idle="glow", beat="scale"),
+)
 
 
 class LyricsRenderer:
@@ -93,12 +100,13 @@ class LyricsRenderer:
         self._rise = (1.0 - enter) * 0.03  # 入场时自下方上浮
 
         if animation.idle == "glow":
-            self._alpha *= 0.85 + 0.15 * math.sin(time * 2.5)
+            self._alpha *= 0.78 + 0.22 * math.sin(time * 2.0)
 
         beat = audio_state is not None and audio_state.beat
         self._beat_pulse = 1.0 if beat else self._beat_pulse * 0.9
         pulse = self._beat_pulse if animation.beat == "scale" else 0.0
         self._scale = 1.0 + pulse * BEAT_SCALE
+        self._alpha *= 1.0 + pulse * BEAT_ALPHA_BOOST  # 节拍时更亮
 
     def render(self, screen_width: int, screen_height: int) -> None:
         """把当前歌词行画到屏幕（alpha 混合）。"""

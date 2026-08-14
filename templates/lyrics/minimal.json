@@ -3,5 +3,5 @@
   "font": "msyh.ttc",
   "color": "#e0e0e0",
   "glow": "#e0e0e0",
-  "animation": {"enter": "fade", "idle": null, "beat": null}
+  "animation": {"enter": "fade", "idle": "glow", "beat": "scale"}
 }
