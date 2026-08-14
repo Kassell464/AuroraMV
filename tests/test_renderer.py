@@ -56,6 +56,27 @@ class RendererTestCase(unittest.TestCase):
                 self.assertGreater(int(pixels.max()), 5, f"{kind} 背景应有内容")
         self.renderer.set_background("galaxy")  # 恢复默认
 
+    def test_scene_switches_background_automatically(self) -> None:
+        """阶段 5：场景管理器按时间自动切换背景。"""
+        from core.renderer.scene import BackgroundSpec, Scene, SceneManager
+
+        manager = SceneManager(
+            [
+                Scene(id=1, start_time=0.0, end_time=2.0, background=BackgroundSpec("neon_grid")),
+                Scene(id=2, start_time=2.0, end_time=4.0, background=BackgroundSpec("waveform")),
+            ]
+        )
+        self.renderer.set_scene_manager(manager)
+
+        self._render_frame(t=1.0)
+        first = type(self.renderer.background).__name__
+        self._render_frame(t=3.0)
+        second = type(self.renderer.background).__name__
+
+        self.assertEqual(first, "NeonGridBackground")
+        self.assertEqual(second, "WaveformBackground")
+        self.renderer.set_scene_manager(None)  # 清理
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,6 +34,11 @@ class AudioEngine:
         """是否正在播放。"""
         return self._playing
 
+    @property
+    def duration(self) -> float:
+        """已加载音频时长（秒）。"""
+        return self._analyzer.duration
+
     def load(self, path: str) -> None:
         """加载并预分析音频；加载失败抛出 AudioLoadError。"""
         self.stop()
