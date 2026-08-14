@@ -1,1 +1,5 @@
-"""AuroraMV UI 面板包（阶段 1 占位）。"""
+"""AuroraMV UI 面板包。"""
+
+from ui.panels.control_panel import ControlPanel, PresetCard
+
+__all__ = ["ControlPanel", "PresetCard"]
