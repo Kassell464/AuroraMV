@@ -1,6 +1,6 @@
 {
   "name": "dj",
-  "background": {"type": "waveform"},
+  "background": {"template": "dj"},
   "lyrics": {"template": "minimal"},
   "effects": ["beat_shake", "flash", "particle"]
 }

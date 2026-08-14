@@ -3,14 +3,23 @@
 场景预设 = 一个完整视觉组合（规格 33 节：背景 + 歌词模板 + 效果），不含时间；
 运行期由 `scenes_from_presets` 按曲目时长均分生成带时间的场景。
 
-## 预设列表
+背景通过 `"background": {"template": "<名称>"}` 引用
+[`../background`](../background) 目录下的背景模板，也可以内联定义
+`{"type": ..., "params": ...}`（内联键覆盖模板键）。
 
-| 预设 | 背景 | 歌词模板（阶段 6） | 效果（阶段 7） | 概念灵感 |
-|------|------|-------------------|---------------|----------|
-| `cinema` | 星云图片 + 慢速镜头推进 | cinema | — | 电影镜头 |
-| `particles` | 银河（粒子/星空，低频加速） | minimal | — | 粒子舞台 |
-| `stage` | 霓虹网格（节拍闪光） | neon | beat_flash | 歌词舞台 |
-| `dj` | 音频波形（低频增亮） | minimal | beat_shake、flash | DJ 专属模式 |
+## 六套系统预设包
+
+| # | 预设 | 背景模板 | 歌词模板 | 效果 | 概念灵感 |
+|---|------|----------|----------|------|----------|
+| 1 | `cinema` | cinema（星云图片 + 慢镜头推进 + 暖色） | cinema | — | 电影镜头 |
+| 2 | `aurora` | aurora（紫色旋臂银河，慢旋高星密度） | minimal | particle | 粒子舞台 |
+| 3 | `cyberpunk` | cyberpunk（品红霓虹网格，快速流动） | neon | flash、beat_shake | 赛博朋克 |
+| 4 | `stage` | stage（青色霓虹网格） | neon | beat_shake、flash | 歌词舞台 |
+| 5 | `synthwave` | synthwave（橙红霓虹网格，慢速） | neon | flash | 合成波 |
+| 6 | `dj` | dj（亮青波形） | minimal | beat_shake、flash、particle | DJ 专属模式 |
+
+所有背景/歌词/效果参数均可调节：改 `templates/background/*.json`、
+`templates/lyrics/*.json`、`templates/effects/*.json` 中的 `params` 即可。
 
 ## 灵感说明
 

@@ -6,10 +6,11 @@ templates/lyrics/*.json：字体、颜色、动画（enter / idle / beat）。
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from core.templates.loader import TemplateLoader
 
 _FONT_CANDIDATES = ("msyh.ttc", "msyhbd.ttc", "simhei.ttf", "simsun.ttc")
 _WINDOWS_FONT_DIR = r"C:\Windows\Fonts"
@@ -47,9 +48,8 @@ def hex_to_rgb(value: str) -> tuple[float, float, float]:
 
 
 def load_lyric_template(path: str) -> LyricTemplate:
-    """从 JSON 加载歌词模板。"""
-    with open(path, encoding="utf-8") as file:
-        data = json.load(file)
+    """从 JSON 加载歌词模板（经 TemplateLoader 校验）。"""
+    data = TemplateLoader().load(path, "lyrics")
     animation = data.get("animation") or {}
     return LyricTemplate(
         name=str(data.get("name", Path(path).stem)),
