@@ -1,0 +1,6 @@
+{
+  "name": "cinema",
+  "background": {"type": "image", "path": "assets/backgrounds/nebula.jpg"},
+  "lyrics": {"template": "cinema"},
+  "effects": []
+}

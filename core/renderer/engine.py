@@ -39,6 +39,7 @@ from core.renderer.shader import (
     FULLSCREEN_VERTEX_SHADER,
     create_program,
 )
+from core.renderer.scene import Scene, SceneManager
 
 WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 
@@ -57,6 +58,9 @@ class Renderer:
         self.circle_vao: moderngl.VertexArray | None = None
         self.background: BackgroundRenderer | None = None
         self.camera = Camera()
+        self._scene_manager: SceneManager | None = None
+        self._active_scene_id: int | None = None
+        self._active_scene: Scene | None = None
         self._waveform_provider: WaveformProvider | None = None
         self._width = 1280
         self._height = 720
@@ -103,6 +107,20 @@ class Renderer:
         """注入波形采样来源（阶段 4 波形背景用；渲染器不直接读音频）。"""
         self._waveform_provider = provider
 
+    def set_scene_manager(self, manager: SceneManager | None) -> None:
+        """注入场景管理器（阶段 5）：update 时按音乐时间自动切换场景。"""
+        self._scene_manager = manager
+        self._active_scene_id = None
+
+    def load_scene(self, scene: Scene | None) -> None:
+        """加载场景（规格 17.1 接口）。scene 为 None 时恢复默认银河背景。"""
+        if scene is None:
+            self.set_background("galaxy")
+            self._active_scene = None
+            return
+        self.set_background(scene.background.kind, scene.background.source)
+        self._active_scene = scene
+
     def update(self, time: float, audio_state: AudioState | None = None) -> None:
         """更新帧状态：摄像机、圆形半径、背景。"""
         self._time = time
@@ -116,8 +134,22 @@ class Renderer:
         waveform = None
         if self._waveform_provider is not None:
             waveform = self._waveform_provider(WAVEFORM_SAMPLES)
+        self._update_scene(audio_state)
         if self.background is not None:
             self.background.update(time, audio_state, waveform)
+
+    def _update_scene(self, audio_state: AudioState | None) -> None:
+        """按音乐时间自动切换场景（阶段 5）。"""
+        if self._scene_manager is None:
+            return
+        scene_time = audio_state.timestamp if audio_state is not None else self._time
+        scene = self._scene_manager.get_scene(scene_time)
+        scene_id = scene.id if scene is not None else None
+        if scene_id == self._active_scene_id:
+            return
+        self._active_scene_id = scene_id
+        if scene is not None:
+            self.load_scene(scene)
 
     def render(self) -> None:
         """渲染一帧：清屏 → 背景（Layer 0）→ 音频响应圆形。"""

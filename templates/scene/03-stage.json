@@ -1,0 +1,6 @@
+{
+  "name": "stage",
+  "background": {"type": "neon_grid"},
+  "lyrics": {"template": "neon"},
+  "effects": ["beat_flash"]
+}
