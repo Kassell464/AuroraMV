@@ -27,6 +27,7 @@ class AudioEngine:
         self._analyzer = AudioAnalyzer()
         self._playing = False
         self._play_started_at = 0.0
+        self._seek_origin = 0.0
         self._clock = time.monotonic
 
     @property
@@ -39,6 +40,19 @@ class AudioEngine:
         """已加载音频时长（秒）。"""
         return self._analyzer.duration
 
+    @property
+    def position(self) -> float:
+        """当前播放位置（秒）。"""
+        return self._position()
+
+    def seek(self, seconds: float) -> None:
+        """跳转到指定位置并继续播放（进度条拖动）。"""
+        seconds = max(0.0, min(seconds, self.duration))
+        pygame.mixer.music.play(0, start=seconds)
+        self._playing = True
+        self._play_started_at = self._clock()
+        self._seek_origin = seconds
+
     def load(self, path: str) -> None:
         """加载并预分析音频；加载失败抛出 AudioLoadError。"""
         self.stop()
@@ -48,10 +62,11 @@ class AudioEngine:
         pygame.mixer.music.load(path)
 
     def play(self) -> None:
-        """开始播放。"""
+        """从头开始播放。"""
         pygame.mixer.music.play()
         self._playing = True
         self._play_started_at = self._clock()
+        self._seek_origin = 0.0
 
     def stop(self) -> None:
         """停止播放。"""
@@ -72,5 +87,7 @@ class AudioEngine:
         if self._playing:
             position = pygame.mixer.music.get_pos() / 1000.0  # ms → s
             if position < 0:  # 部分后端可能返回 -1
-                position = self._clock() - self._play_started_at
+                position = self._clock() - self._play_started_at + self._seek_origin
+            else:
+                position += self._seek_origin  # get_pos 不含 seek 偏移（实测）
         return position

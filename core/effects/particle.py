@@ -72,8 +72,7 @@ class ParticleEffect(Effect):
         audio_state: AudioState | None = None,
         post_state: PostState | None = None,
     ) -> None:
-        dt = min(max(0.0, time - self._last_time), 0.1)
-        self._last_time = time
+        dt = self._effect_dt(time)
 
         bass = float(audio_state.bass) if audio_state is not None else 0.5
         target = int(self.params.base_count + bass * self.params.bass_multiplier)

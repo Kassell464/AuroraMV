@@ -47,6 +47,11 @@ _ASPECTS = ("16:9", "9:16", "1:1")
 _FORMATS = ("mp4", "webm", "mov")
 
 
+def _format_time(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
 class PresetCard(QFrame):
     """预设卡片：可点击，带选中高亮。"""
 
@@ -103,6 +108,9 @@ class ControlPanel(QFrame):
     effect_param_changed = Signal(str, str, float)  # 效果名, 参数名, 值
     play_pause_requested = Signal()
     export_requested = Signal(object, str)  # (ExportSettings, 输出路径)
+    seek_requested = Signal(float)  # 秒
+    audio_file_selected = Signal(str)
+    lrc_file_selected = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -112,6 +120,8 @@ class ControlPanel(QFrame):
         self._fade_done = False
         self._playing = False
         self._pulse_on = False
+        self._dragging = False
+        self._duration = 1.0
         self._build()
 
     # ---------- 构建 ----------
@@ -203,6 +213,30 @@ class ControlPanel(QFrame):
         self._export_status.setWordWrap(True)
         layout.addWidget(self._export_status)
 
+        # 播放进度（可拖动）
+        layout.addWidget(self._section("播放进度", content))
+        progress_row = QHBoxLayout()
+        self._time_label = QLabel("0:00 / 0:00", content)
+        self._time_label.setProperty("muted", True)
+        self._seek_slider = QSlider(Qt.Horizontal, content)
+        self._seek_slider.setRange(0, 1000)
+        self._seek_slider.sliderPressed.connect(lambda: setattr(self, "_dragging", True))
+        self._seek_slider.sliderReleased.connect(self._on_seek_released)
+        progress_row.addWidget(self._time_label)
+        progress_row.addWidget(self._seek_slider, 1)
+        layout.addLayout(progress_row)
+
+        # 导入
+        layout.addWidget(self._section("导入", content))
+        import_row = QHBoxLayout()
+        self._audio_button = QPushButton("打开音频", content)
+        self._audio_button.clicked.connect(self._import_audio)
+        self._lrc_button = QPushButton("打开歌词", content)
+        self._lrc_button.clicked.connect(self._import_lrc)
+        import_row.addWidget(self._audio_button, 1)
+        import_row.addWidget(self._lrc_button, 1)
+        layout.addLayout(import_row)
+
         # 播放控制
         self._play_button = QPushButton("⏸ 暂停", content)
         self._play_button.setProperty("accent", True)
@@ -279,6 +313,23 @@ class ControlPanel(QFrame):
     def _on_play_clicked(self) -> None:
         self.play_pause_requested.emit()
 
+    def _on_seek_released(self) -> None:
+        self._dragging = False
+        seconds = self._seek_slider.value() / 1000.0 * self._duration
+        self.seek_requested.emit(seconds)
+
+    def _import_audio(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择音频", "", "音频 (*.wav *.mp3 *.flac)"
+        )
+        if path:
+            self.audio_file_selected.emit(path)
+
+    def _import_lrc(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "选择歌词", "", "歌词 (*.lrc)")
+        if path:
+            self.lrc_file_selected.emit(path)
+
     def _browse_output(self) -> None:
         fmt = self._format_combo.currentText()
         path, _ = QFileDialog.getSaveFileName(
@@ -338,6 +389,16 @@ class ControlPanel(QFrame):
             self._pulse_timer.stop()
             self._pulse_on = False
         self._update_play_button()
+
+    def set_progress(self, position: float, duration: float) -> None:
+        """更新播放进度显示（由控制器轮询）。"""
+        self._duration = max(duration, 0.01)
+        if not self._dragging:
+            fraction = max(0.0, min(1.0, position / self._duration))
+            self._seek_slider.blockSignals(True)
+            self._seek_slider.setValue(int(fraction * 1000))
+            self._seek_slider.blockSignals(False)
+        self._time_label.setText(f"{_format_time(position)} / {_format_time(duration)}")
 
     def set_export_progress(self, done: int, total: int) -> None:
         self._progress.setVisible(True)

@@ -31,9 +31,14 @@ def make_test_texture(size: int = 256) -> npt.NDArray[np.uint8]:
 
 
 def upload_texture(ctx: moderngl.Context, rgba: npt.NDArray[np.uint8]) -> moderngl.Texture:
-    """把 RGBA 数组上传为 GPU 纹理（双线性过滤）。"""
+    """把 RGBA 数组上传为 GPU 纹理（双线性过滤）。
+
+    输入为图像行序（首行在顶部，如 Pillow），上传前垂直翻转，
+    与 OpenGL 纹理坐标（原点在左下）对齐，否则画面上下颠倒。
+    """
     height, width = rgba.shape[:2]
-    texture = ctx.texture((width, height), 4, data=rgba.tobytes())
+    data = np.ascontiguousarray(rgba[::-1]).tobytes()
+    texture = ctx.texture((width, height), 4, data=data)
     texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
     return texture
 

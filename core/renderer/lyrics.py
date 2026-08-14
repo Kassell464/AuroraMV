@@ -160,7 +160,8 @@ class LyricsRenderer:
             stroke_width=stroke,
             stroke_fill=glow,
         )
-        rgba = np.asarray(image, dtype=np.uint8)
+        # 垂直翻转：Pillow 行序自上而下，OpenGL 纹理坐标原点在左下
+        rgba = np.ascontiguousarray(np.asarray(image, dtype=np.uint8)[::-1])
         texture = self._ctx.texture((image.width, image.height), 4, data=rgba.tobytes())
         texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
         return texture

@@ -40,8 +40,7 @@ class BeatShakeEffect(Effect):
         audio_state: AudioState | None = None,
         post_state: PostState | None = None,
     ) -> None:
-        dt = min(max(0.0, time - self._last_time), 0.1)
-        self._last_time = time
+        dt = self._effect_dt(time)
         beat = audio_state is not None and audio_state.beat
         if beat:
             self._energy = 1.0
