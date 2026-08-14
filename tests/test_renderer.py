@@ -41,10 +41,24 @@ class RendererTestCase(unittest.TestCase):
         return np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).reshape(64, 64, 3)
 
     def test_draws_frame_with_default_background(self) -> None:
-        """默认背景（银河）+ 圆形叠加层应成功绘制。"""
+        """默认背景（银河）应成功绘制。"""
         pixels = self._render_frame()
-        self.assertGreater(int(pixels.max()), 5, "画面应有内容（银河背景 + 圆形）")
+        self.assertGreater(int(pixels.max()), 5, "画面应有内容（银河背景）")
         self.assertLess(int(pixels.min()), 240, "画面应有明暗层次")
+
+    def test_paused_background_freezes(self) -> None:
+        """背景用音乐时间驱动：墙钟前进但音乐时间不变（暂停）→ 画面冻结。"""
+        self.renderer.set_background("galaxy")
+        self.renderer.resize(64, 64)
+        self.renderer.update(1.0, _state(1.0))
+        self.renderer.render(target=self.fbo)
+        before = np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).reshape(64, 64, 3)
+        # 墙钟走了 98 秒，但音乐时间仍停在 1.0（暂停状态）
+        self.renderer.update(99.0, _state(1.0))
+        self.renderer.render(target=self.fbo)
+        after = np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).reshape(64, 64, 3)
+        self.assertTrue(np.array_equal(before, after), "暂停时背景画面应保持不变")
+        self.renderer.set_background("galaxy")  # 恢复默认
 
     def test_switches_background(self) -> None:
         """渲染器可在银河 / 波形 / 霓虹网格之间切换背景。"""

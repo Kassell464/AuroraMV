@@ -126,6 +126,27 @@ class LyricsRendererGLTestCase(unittest.TestCase):
         pixels = np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).reshape(128, 128, 3)
         self.assertGreater(int(pixels.max()), 100, "歌词文本应渲染出亮色像素")
 
+    def test_beat_pulse_makes_lyrics_brighter_and_bigger(self) -> None:
+        """节拍动效：beat 触发时歌词更亮（缩放 + 提亮），画面像素总和增大。"""
+        from core.audio.state import AudioState
+
+        line = LyricLine(text="Beat 节拍", start=0.0, end=4.0)
+
+        def frame(beat: bool) -> np.ndarray:
+            self.fbo.use()
+            self.ctx.clear(0.0, 0.0, 0.0)
+            state = AudioState(
+                timestamp=1.0, volume=0.5, bass=0.5, mid=0.5, treble=0.5,
+                beat=beat, bpm=120.0,
+            )
+            self.renderer.update(1.0, line, state)
+            self.renderer.render(128, 128)
+            return np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).astype(np.int64)
+
+        quiet = frame(False)
+        beat = frame(True)
+        self.assertGreater(int(beat.sum()), int(quiet.sum()), "节拍时歌词应更亮/更大")
+
 
 if __name__ == "__main__":
     unittest.main()

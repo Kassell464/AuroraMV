@@ -11,13 +11,12 @@ Renderer 是 AuroraMV 核心：负责生成每一帧画面。
 阶段 4：背景系统（Layer 0）——图片背景与动态着色器背景
 （银河 / 波形 / 霓虹网格，均响应 AudioState）。
 
-渲染顺序（规格 18 节图层系统）：背景 →（后续：粒子/效果/歌词）→ 圆形叠加层。
+渲染顺序（规格 18 节图层系统）：背景 → 粒子/效果 → 歌词（最上层）。
 load_scene / SceneManager 将在阶段 5 场景系统接入。
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from pathlib import Path
 
@@ -36,7 +35,6 @@ from core.renderer.background import (
 )
 from core.renderer.camera import Camera
 from core.renderer.shader import (
-    CIRCLE_FRAGMENT_SHADER,
     FULLSCREEN_VERTEX_SHADER,
     POST_FRAGMENT_SHADER,
     create_program,
@@ -52,9 +50,6 @@ from core.templates.loader import TemplateError
 
 WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 
-# 音频响应圆形：半径 = 基础 + 低频 × 缩放（阶段 3 演示）
-BASE_RADIUS = 0.12
-RADIUS_SCALE = 0.25
 WAVEFORM_SAMPLES = 512
 
 # 歌词模板目录（templates/lyrics）
@@ -69,8 +64,6 @@ class Renderer:
 
     def __init__(self) -> None:
         self.ctx: moderngl.Context | None = None
-        self.circle_program: moderngl.Program | None = None
-        self.circle_vao: moderngl.VertexArray | None = None
         self.background: BackgroundRenderer | None = None
         self.camera = Camera()
         self._scene_manager: SceneManager | None = None
@@ -92,7 +85,6 @@ class Renderer:
         self._width = 1280
         self._height = 720
         self._time = 0.0
-        self._circle_radius = BASE_RADIUS
 
     def initialize(self, ctx: moderngl.Context | None = None) -> None:
         """创建（或接管）OpenGL 上下文并准备渲染资源。
@@ -101,22 +93,6 @@ class Renderer:
         不传 ctx 时自动检测并包装当前上下文；测试可显式传入独立上下文。
         """
         self.ctx = ctx if ctx is not None else moderngl.create_context()
-        self.circle_program = create_program(
-            self.ctx, FULLSCREEN_VERTEX_SHADER, CIRCLE_FRAGMENT_SHADER
-        )
-        self.circle_program["u_color"].value = (0.25, 0.8, 1.0)
-
-        vbo_positions = self.ctx.buffer(FULLSCREEN_POSITIONS.tobytes())
-        vbo_uvs = self.ctx.buffer(FULLSCREEN_UVS.tobytes())
-        ibo = self.ctx.buffer(FULLSCREEN_INDICES.tobytes())
-        self.circle_vao = self.ctx.vertex_array(
-            self.circle_program,
-            [
-                (vbo_positions, "3f", "in_position"),
-                (vbo_uvs, "2f", "in_uv"),
-            ],
-            ibo,
-        )
 
         # 默认背景：银河（阶段 4）
         self.background = create_background(self.ctx, "galaxy")
@@ -129,6 +105,9 @@ class Renderer:
             self.ctx, FULLSCREEN_VERTEX_SHADER, POST_FRAGMENT_SHADER
         )
         self._post_program["u_scene"].value = 0
+        vbo_positions = self.ctx.buffer(FULLSCREEN_POSITIONS.tobytes())
+        vbo_uvs = self.ctx.buffer(FULLSCREEN_UVS.tobytes())
+        ibo = self.ctx.buffer(FULLSCREEN_INDICES.tobytes())
         self._post_vao = self.ctx.vertex_array(
             self._post_program,
             [
@@ -260,14 +239,9 @@ class Renderer:
                 continue  # 无效模板跳过
 
     def update(self, time: float, audio_state: AudioState | None = None) -> None:
-        """更新帧状态：摄像机、圆形半径、背景、场景、歌词。"""
+        """更新帧状态：摄像机、背景、场景、歌词。"""
         self._time = time
         self.camera.update(time)
-        if audio_state is not None:
-            bass = float(audio_state.bass)
-        else:
-            bass = 0.5 + 0.5 * math.sin(time * 2.0)
-        self._circle_radius = BASE_RADIUS + bass * RADIUS_SCALE
 
         music_time = audio_state.timestamp if audio_state is not None else self._time
 
@@ -282,7 +256,8 @@ class Renderer:
             self.background.set_spectrum(self._spectrum_provider(64))
         self._update_scene(music_time)
         if self.background is not None:
-            self.background.update(time, audio_state, waveform)
+            # 背景用音乐时间驱动：随节拍/低频动态变化，暂停时随音乐一起冻结
+            self.background.update(music_time, audio_state, waveform)
 
         line = None
         if self._lyrics_provider is not None:
@@ -306,9 +281,8 @@ class Renderer:
             self.load_scene(scene)
 
     def render(self, target: moderngl.Framebuffer | None = None) -> None:
-        """渲染一帧：场景（背景/粒子/歌词/圆形）→ 后期处理（震动/闪光）。"""
+        """渲染一帧：场景（背景/粒子/歌词）→ 后期处理（震动/闪光）。"""
         assert self.ctx is not None
-        assert self.circle_program is not None and self.circle_vao is not None
         assert self.background is not None
         assert self._scene_fbo is not None and self._scene_texture is not None
         assert self._post_program is not None and self._post_vao is not None
@@ -321,12 +295,7 @@ class Renderer:
         self.background.render()
         self.effects.render()
 
-        self.circle_program["u_radius"].value = self._circle_radius
-        self.ctx.enable(moderngl.BLEND)
-        self.circle_vao.render(moderngl.TRIANGLES)
-        self.ctx.disable(moderngl.BLEND)
-
-        # 歌词在最上层（画面上方），不被粒子/圆形遮挡
+        # 歌词在最上层（画面上方），不被粒子/效果遮挡
         if self.lyrics is not None:
             self.lyrics.render(self._width, self._height)
 
