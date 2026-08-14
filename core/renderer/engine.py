@@ -6,18 +6,19 @@ Renderer 是 AuroraMV 核心：负责生成每一帧画面。
 - UI 与渲染器分离：UI 只调用本模块公开方法，不直接调用 OpenGL；
 - 预览与导出共用渲染器：导出阶段将复用同一渲染管线。
 
-阶段 2：OpenGL 上下文、着色器加载器、纹理管理器、摄像机；
-演示：背景颜色 + 图片纹理 + 简单动画。
-阶段 3：接入 AudioState（音频响应）——圆形大小随低频变化。
+阶段 2：OpenGL 上下文、摄像机、着色器/纹理基础设施。
+阶段 3：AudioState 音频响应（圆形大小随低频变化）。
+阶段 4：背景系统（Layer 0）——图片背景与动态着色器背景
+（银河 / 波形 / 霓虹网格，均响应 AudioState）。
 
-完整帧渲染管线（获取场景 → 更新音频 → 背景 → 效果 → 歌词 → 后期处理 → 输出帧，
-见规格 17.2 节）将在后续阶段（场景 / 效果 / 歌词系统）逐步接入；
-load_scene 将在阶段 5 场景系统实现。
+渲染顺序（规格 18 节图层系统）：背景 →（后续：粒子/效果/歌词）→ 圆形叠加层。
+load_scene / SceneManager 将在阶段 5 场景系统接入。
 """
 
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 import numpy as np
 import numpy.typing as npt
@@ -25,54 +26,26 @@ import numpy.typing as npt
 import moderngl
 
 from core.audio.state import AudioState
+from core.renderer.background import (
+    FULLSCREEN_INDICES,
+    FULLSCREEN_POSITIONS,
+    FULLSCREEN_UVS,
+    BackgroundRenderer,
+    create_background,
+)
 from core.renderer.camera import Camera
 from core.renderer.shader import (
     CIRCLE_FRAGMENT_SHADER,
-    CIRCLE_VERTEX_SHADER,
+    FULLSCREEN_VERTEX_SHADER,
     create_program,
 )
-from core.renderer.texture import TextureManager, make_test_texture
 
-Mat4 = npt.NDArray[np.float32]
+WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 
 # 音频响应圆形：半径 = 基础 + 低频 × 缩放（阶段 3 演示）
 BASE_RADIUS = 0.12
 RADIUS_SCALE = 0.25
-
-# 全屏四边形（两个三角形）
-QUAD_POSITIONS = np.array(
-    [
-        -1.0, -1.0, 0.0,
-        1.0, -1.0, 0.0,
-        1.0, 1.0, 0.0,
-        -1.0, 1.0, 0.0,
-    ],
-    dtype=np.float32,
-)
-
-QUAD_UVS = np.array(
-    [
-        0.0, 0.0,
-        1.0, 0.0,
-        1.0, 1.0,
-        0.0, 1.0,
-    ],
-    dtype=np.float32,
-)
-
-QUAD_INDICES = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)
-
-
-def _rotation_y(angle: float) -> Mat4:
-    """绕 Y 轴旋转矩阵（模型矩阵，用于简单动画）。"""
-    c = math.cos(angle)
-    s = math.sin(angle)
-    mat = np.eye(4, dtype=np.float32)
-    mat[0, 0] = c
-    mat[0, 2] = s
-    mat[2, 0] = -s
-    mat[2, 2] = c
-    return mat
+WAVEFORM_SAMPLES = 512
 
 
 class Renderer:
@@ -80,12 +53,11 @@ class Renderer:
 
     def __init__(self) -> None:
         self.ctx: moderngl.Context | None = None
-        self.program: moderngl.Program | None = None
         self.circle_program: moderngl.Program | None = None
-        self.vao: moderngl.VertexArray | None = None
         self.circle_vao: moderngl.VertexArray | None = None
-        self.textures: TextureManager | None = None
+        self.background: BackgroundRenderer | None = None
         self.camera = Camera()
+        self._waveform_provider: WaveformProvider | None = None
         self._width = 1280
         self._height = 720
         self._time = 0.0
@@ -98,31 +70,41 @@ class Renderer:
         不传 ctx 时自动检测并包装当前上下文；测试可显式传入独立上下文。
         """
         self.ctx = ctx if ctx is not None else moderngl.create_context()
-        self.program = create_program(self.ctx)
         self.circle_program = create_program(
-            self.ctx, CIRCLE_VERTEX_SHADER, CIRCLE_FRAGMENT_SHADER
+            self.ctx, FULLSCREEN_VERTEX_SHADER, CIRCLE_FRAGMENT_SHADER
         )
         self.circle_program["u_color"].value = (0.25, 0.8, 1.0)
 
-        vbo_positions = self.ctx.buffer(QUAD_POSITIONS.tobytes())
-        vbo_uvs = self.ctx.buffer(QUAD_UVS.tobytes())
-        ibo = self.ctx.buffer(QUAD_INDICES.tobytes())
-        content = [
-            (vbo_positions, "3f", "in_position"),
-            (vbo_uvs, "2f", "in_uv"),
-        ]
-        self.vao = self.ctx.vertex_array(self.program, content, ibo)
-        self.circle_vao = self.ctx.vertex_array(self.circle_program, content, ibo)
+        vbo_positions = self.ctx.buffer(FULLSCREEN_POSITIONS.tobytes())
+        vbo_uvs = self.ctx.buffer(FULLSCREEN_UVS.tobytes())
+        ibo = self.ctx.buffer(FULLSCREEN_INDICES.tobytes())
+        self.circle_vao = self.ctx.vertex_array(
+            self.circle_program,
+            [
+                (vbo_positions, "3f", "in_position"),
+                (vbo_uvs, "2f", "in_uv"),
+            ],
+            ibo,
+        )
 
-        self.textures = TextureManager(self.ctx)
-        self.textures.create("test", make_test_texture())
-        self.program["u_texture"].value = 0
+        # 默认背景：银河（阶段 4）
+        self.background = create_background(self.ctx, "galaxy")
+
+    def set_background(self, kind: str, source: str | None = None) -> None:
+        """切换背景（阶段 4）。kind: image / galaxy / waveform / neon_grid。"""
+        assert self.ctx is not None, "请先调用 initialize()"
+        new = create_background(self.ctx, kind, source)
+        if self.background is not None:
+            self.background.release()
+        self.background = new
+        self.background.set_aspect(self._width / self._height)
+
+    def set_waveform_provider(self, provider: WaveformProvider) -> None:
+        """注入波形采样来源（阶段 4 波形背景用；渲染器不直接读音频）。"""
+        self._waveform_provider = provider
 
     def update(self, time: float, audio_state: AudioState | None = None) -> None:
-        """更新帧状态：摄像机摆动 + 圆形半径随低频变化。
-
-        audio_state 为 None（未接入音频）时用正弦模拟低频，保证演示可用。
-        """
+        """更新帧状态：摄像机、圆形半径、背景。"""
         self._time = time
         self.camera.update(time)
         if audio_state is not None:
@@ -131,28 +113,23 @@ class Renderer:
             bass = 0.5 + 0.5 * math.sin(time * 2.0)
         self._circle_radius = BASE_RADIUS + bass * RADIUS_SCALE
 
+        waveform = None
+        if self._waveform_provider is not None:
+            waveform = self._waveform_provider(WAVEFORM_SAMPLES)
+        if self.background is not None:
+            self.background.update(time, audio_state, waveform)
+
     def render(self) -> None:
-        """渲染一帧：背景颜色 → 纹理四边形（旋转）→ 音频响应圆形。"""
-        assert self.ctx is not None and self.program is not None
+        """渲染一帧：清屏 → 背景（Layer 0）→ 音频响应圆形。"""
+        assert self.ctx is not None
         assert self.circle_program is not None and self.circle_vao is not None
-        assert self.vao is not None and self.textures is not None
+        assert self.background is not None
 
         self.ctx.viewport = (0, 0, self._width, self._height)
-        # 1) 背景颜色
-        self.ctx.clear(0.05, 0.06, 0.10, 1.0)
+        self.ctx.clear(0.03, 0.03, 0.06, 1.0)
 
-        # 2) 纹理四边形（简单动画：缓慢绕 Y 轴旋转）
-        texture = self.textures.get("test")
-        assert texture is not None
-        texture.use(0)
-        model = _rotation_y(self._time * 0.5)
-        mvp = self.camera.projection_matrix() @ self.camera.view_matrix() @ model
-        self.program["u_mvp"].write(
-            np.ascontiguousarray(mvp.T, dtype=np.float32).tobytes()
-        )
-        self.vao.render(moderngl.TRIANGLES)
+        self.background.render()
 
-        # 3) 音频响应圆形（半径 = 基础 + 低频 × 缩放）
         self.circle_program["u_radius"].value = self._circle_radius
         self.ctx.enable(moderngl.BLEND)
         self.circle_vao.render(moderngl.TRIANGLES)
@@ -165,3 +142,5 @@ class Renderer:
         if self.ctx is not None:
             self.ctx.viewport = (0, 0, self._width, self._height)
         self.camera.set_aspect(self._width / self._height)
+        if self.background is not None:
+            self.background.set_aspect(self._width / self._height)

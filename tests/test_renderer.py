@@ -17,7 +17,12 @@ try:
 except Exception:
     GL_AVAILABLE = False
 
+from core.audio.state import AudioState
 from core.renderer.engine import Renderer
+
+
+def _state(t: float) -> AudioState:
+    return AudioState(timestamp=t, volume=0.5, bass=0.7, mid=0.4, treble=0.3, beat=False, bpm=120.0)
 
 
 @unittest.skipUnless(GL_AVAILABLE, "当前环境无法创建 OpenGL 上下文")
@@ -29,26 +34,27 @@ class RendererTestCase(unittest.TestCase):
         cls.renderer.initialize(ctx=cls.ctx)
         cls.fbo = cls.ctx.simple_framebuffer((64, 64), components=3)
 
-    def test_draws_frame_with_background_and_texture(self) -> None:
+    def _render_frame(self, t: float = 1.0) -> np.ndarray:
         self.fbo.use()
         self.renderer.resize(64, 64)
-        self.renderer.update(0.0)
+        self.renderer.update(t, _state(t))
         self.renderer.render()
+        return np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).reshape(64, 64, 3)
 
-        pixels = np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).reshape(64, 64, 3)
-        background = np.array([13, 15, 26], dtype=np.int64)  # 0.05/0.06/0.10 * 255
+    def test_draws_frame_with_default_background(self) -> None:
+        """默认背景（银河）+ 圆形叠加层应成功绘制。"""
+        pixels = self._render_frame()
+        self.assertGreater(int(pixels.max()), 5, "画面应有内容（银河背景 + 圆形）")
+        self.assertLess(int(pixels.min()), 240, "画面应有明暗层次")
 
-        corner = pixels[0, 0].astype(np.int64)
-        self.assertTrue(
-            np.all(np.abs(corner - background) <= 2),
-            f"角落应为背景色，实际: {corner}",
-        )
-
-        center = pixels[32, 32].astype(np.int64)
-        self.assertTrue(
-            np.any(np.abs(center - background) > 8),
-            f"中心应包含纹理内容，实际: {center}",
-        )
+    def test_switches_background(self) -> None:
+        """渲染器可在银河 / 波形 / 霓虹网格之间切换背景。"""
+        for kind in ("galaxy", "waveform", "neon_grid"):
+            with self.subTest(kind=kind):
+                self.renderer.set_background(kind)
+                pixels = self._render_frame()
+                self.assertGreater(int(pixels.max()), 5, f"{kind} 背景应有内容")
+        self.renderer.set_background("galaxy")  # 恢复默认
 
 
 if __name__ == "__main__":

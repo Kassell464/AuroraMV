@@ -42,6 +42,8 @@ class AudioAnalyzer:
         self._bands: dict[str, npt.NDArray[np.float32]] = {}
         self._beat_times = np.zeros(0, dtype=np.float32)
         self._bpm = 0.0
+        self._wave = np.zeros(0, dtype=np.float32)
+        self._wave_sr = 0.0
 
     @property
     def duration(self) -> float:
@@ -82,6 +84,17 @@ class AudioAnalyzer:
             bpm=self._bpm,
         )
 
+    def get_waveform(self, end_time: float, n: int) -> npt.NDArray[np.float32]:
+        """返回截止于 end_time 的 n 个降采样波形采样（可视化用，约 4kHz）。"""
+        if self._wave.size == 0 or n <= 0:
+            return np.zeros(max(n, 0), dtype=np.float32)
+        end = min(int(end_time * self._wave_sr), self._wave.size)
+        start = max(end - n, 0)
+        out = np.zeros(n, dtype=np.float32)
+        segment = self._wave[start:end]
+        out[n - segment.size:] = segment
+        return out
+
     # ---------- 内部实现 ----------
 
     def _analyze(self, y: npt.NDArray[np.float32], sr: int) -> None:
@@ -106,6 +119,11 @@ class AudioAnalyzer:
         self._bands = {name: _normalize(bands[name]) for name, _, _ in _BANDS}
         self._bpm, self._beat_times = detect_beats(y, sr)
         self._duration = float(len(y)) / float(sr)
+
+        # 可视化波形：降采样存储（约 4kHz）
+        factor = max(1, sr // 4000)
+        self._wave = y[::factor].astype(np.float32)
+        self._wave_sr = float(sr) / float(factor)
 
     def _interp(self, arr: npt.NDArray[np.float32], t: float, idx: int) -> float:
         if arr.size == 0:
