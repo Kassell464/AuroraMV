@@ -1,0 +1,5 @@
+{
+  "name": "particle",
+  "type": "particle",
+  "params": {"base_count": 60, "bass_multiplier": 140, "speed": 0.35, "rise": 0.3, "spread": 0.6, "sway": 0.3, "size": 4.0, "lifetime": 2.5, "color": [0.4, 0.9, 1.0]}
+}

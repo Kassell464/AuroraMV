@@ -191,6 +191,51 @@ void main() {
 """
 
 
+# 粒子（阶段 7）：点精灵，生命周期淡出
+PARTICLE_VERTEX_SHADER = """
+#version 330
+in vec2 in_position;
+in float in_life;   // 剩余生命比例 0..1
+in float in_size;
+out float v_life;
+void main() {
+    v_life = clamp(in_life, 0.0, 1.0);
+    gl_Position = vec4(in_position, 0.0, 1.0);
+    gl_PointSize = in_size * (0.4 + v_life * 1.2);
+}
+"""
+
+PARTICLE_FRAGMENT_SHADER = """
+#version 330
+in float v_life;
+uniform vec3 u_color;
+out vec4 fragColor;
+void main() {
+    vec2 p = gl_PointCoord - 0.5;
+    float d = length(p);
+    float a = smoothstep(0.5, 0.15, d) * v_life;
+    fragColor = vec4(u_color, a);
+}
+"""
+
+# 后期处理（阶段 7）：场景纹理 + 震动偏移 + 闪光叠加
+POST_FRAGMENT_SHADER = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_scene;
+uniform vec2 u_offset;
+uniform float u_flash;
+uniform vec3 u_flash_color;
+out vec4 fragColor;
+void main() {
+    vec2 uv = v_uv + u_offset;
+    vec3 col = texture(u_scene, uv).rgb;
+    col += u_flash_color * u_flash;
+    fragColor = vec4(col, 1.0);
+}
+"""
+
+
 class ShaderError(RuntimeError):
     """着色器编译或链接失败。"""
 
