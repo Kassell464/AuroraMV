@@ -1,0 +1,6 @@
+{
+  "name": "synthwave",
+  "background": {"template": "synthwave"},
+  "lyrics": {"template": "neon"},
+  "effects": ["flash"]
+}

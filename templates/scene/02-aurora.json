@@ -1,0 +1,6 @@
+{
+  "name": "aurora",
+  "background": {"template": "aurora"},
+  "lyrics": {"template": "minimal"},
+  "effects": ["particle"]
+}

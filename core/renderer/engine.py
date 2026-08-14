@@ -48,6 +48,7 @@ from core.renderer.lyrics import DEFAULT_LYRIC_TEMPLATE, LyricsRenderer
 from core.effects.effect import PostState
 from core.effects.manager import EffectManager, create_effect
 from core.effects.template import load_effect_spec
+from core.templates.loader import TemplateError
 
 WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 
@@ -134,10 +135,15 @@ class Renderer:
         )
         self._create_scene_fbo()
 
-    def set_background(self, kind: str, source: str | None = None) -> None:
-        """切换背景（阶段 4）。kind: image / galaxy / waveform / neon_grid。"""
+    def set_background(
+        self,
+        kind: str,
+        source: str | None = None,
+        params: dict[str, object] | None = None,
+    ) -> None:
+        """切换背景（阶段 4/8）。kind: image / galaxy / waveform / neon_grid。"""
         assert self.ctx is not None, "请先调用 initialize()"
-        new = create_background(self.ctx, kind, source)
+        new = create_background(self.ctx, kind, source, params)
         if self.background is not None:
             self.background.release()
         self.background = new
@@ -160,7 +166,9 @@ class Renderer:
             self.set_lyric_template(None)
             self.effects.clear()
             return
-        self.set_background(scene.background.kind, scene.background.source)
+        self.set_background(
+            scene.background.kind, scene.background.source, scene.background.params
+        )
         self._active_scene = scene
         if scene.lyric_template:
             self.set_lyric_template(scene.lyric_template)
@@ -181,8 +189,12 @@ class Renderer:
             self.lyrics.set_template(DEFAULT_LYRIC_TEMPLATE)
             return
         path = LYRICS_TEMPLATES_DIR / f"{name}.json"
-        if path.exists():
+        if not path.exists():
+            return
+        try:
             self.lyrics.set_template(load_lyric_template(str(path)))
+        except TemplateError:
+            return  # 模板无效时保持当前模板
 
     def _load_effects(self, names: list[str]) -> None:
         """按场景效果名从模板加载效果（阶段 7）。"""
@@ -193,7 +205,10 @@ class Renderer:
             path = EFFECTS_TEMPLATES_DIR / f"{name}.json"
             if not path.exists():
                 continue
-            self.effects.add(create_effect(self.ctx, load_effect_spec(str(path))))
+            try:
+                self.effects.add(create_effect(self.ctx, load_effect_spec(str(path))))
+            except TemplateError:
+                continue  # 无效模板跳过
 
     def update(self, time: float, audio_state: AudioState | None = None) -> None:
         """更新帧状态：摄像机、圆形半径、背景、场景、歌词。"""

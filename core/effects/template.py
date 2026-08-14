@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
+
+from core.templates.loader import TemplateLoader
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,9 +18,8 @@ class EffectSpec:
 
 
 def load_effect_spec(path: str) -> EffectSpec:
-    """从 JSON 加载效果规格。"""
-    with open(path, encoding="utf-8") as file:
-        data = json.load(file)
+    """从 JSON 加载效果规格（经 TemplateLoader 校验）。"""
+    data = TemplateLoader().load(path, "effects")
     return EffectSpec(
         name=str(data.get("name", Path(path).stem)),
         type=str(data.get("type", Path(path).stem)),

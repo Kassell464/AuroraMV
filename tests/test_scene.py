@@ -72,7 +72,7 @@ class ScenePresetTestCase(unittest.TestCase):
     def test_loads_all_presets(self) -> None:
         presets = load_scene_presets(PRESETS_DIR)
         names = {p.name for p in presets}
-        for expected in ("cinema", "particles", "stage", "dj"):
+        for expected in ("cinema", "aurora", "cyberpunk", "stage", "synthwave", "dj"):
             self.assertIn(expected, names)
 
     def test_presets_have_background_kinds(self) -> None:
@@ -86,9 +86,10 @@ class ScenePresetTestCase(unittest.TestCase):
         self.assertEqual(len(scenes), len(presets))
         self.assertEqual(scenes[0].start_time, 0.0)
         self.assertEqual(scenes[-1].end_time, 8.0)
-        # 每个场景时长相等（8 / 4 = 2 秒）
+        # 每个场景时长相等（均分整首曲目）
+        slot = 8.0 / len(presets)
         for scene in scenes:
-            self.assertAlmostEqual(scene.end_time - scene.start_time, 2.0, places=6)
+            self.assertAlmostEqual(scene.end_time - scene.start_time, slot, places=6)
 
 
 if __name__ == "__main__":

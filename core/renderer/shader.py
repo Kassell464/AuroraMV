@@ -62,6 +62,10 @@ in vec2 v_uv;
 uniform float u_time;
 uniform float u_bass;
 uniform float u_aspect;
+uniform float u_spin_speed;
+uniform float u_star_brightness;
+uniform float u_star_density;
+uniform vec3 u_arm_color;
 out vec4 fragColor;
 
 float hash(vec2 p) {
@@ -74,7 +78,7 @@ void main() {
     float r = length(uv);
     float ang = atan(uv.y, uv.x);
 
-    float spin = u_time * (0.15 + u_bass * 0.6);
+    float spin = u_time * (0.15 + u_bass * 0.6) * u_spin_speed;
     float rot_ang = ang + spin * (1.0 + 1.5 * r);
 
     float arms = 0.5 + 0.5 * sin(rot_ang * 2.0 + 16.0 * r);
@@ -87,7 +91,7 @@ void main() {
         vec2 id = floor(g);
         vec2 f = fract(g) - 0.5;
         float h = hash(id);
-        if (h > 0.86) {
+        if (h > u_star_density) {
             float d = length(f);
             float s = smoothstep(0.14, 0.0, d);
             float tw = 0.5 + 0.5 * sin(u_time * (2.0 + 3.0 * u_bass) + h * 60.0);
@@ -98,8 +102,8 @@ void main() {
     float core = exp(-r * 4.0) * (0.8 + u_bass * 2.0);
 
     vec3 col = vec3(0.03, 0.03, 0.09);
-    col += arms * vec3(0.30, 0.15, 0.60) * (0.7 + 0.3 * u_bass);
-    col += stars * vec3(0.90, 0.95, 1.00);
+    col += arms * u_arm_color * (0.7 + 0.3 * u_bass);
+    col += stars * u_star_brightness * vec3(0.90, 0.95, 1.00);
     col += core * vec3(1.00, 0.80, 0.90);
     fragColor = vec4(col, 1.0);
 }
@@ -137,6 +141,7 @@ uniform float u_time;
 uniform float u_bass;
 uniform float u_flash;
 uniform float u_aspect;
+uniform float u_speed;
 uniform vec3 u_color;
 out vec4 fragColor;
 
@@ -145,7 +150,7 @@ void main() {
     p.x *= u_aspect;
 
     float horizon = -0.72;
-    float speed = 0.6 + u_bass * 2.0;
+    float speed = (0.6 + u_bass * 2.0) * u_speed;
     float t = u_time * speed;
 
     float depth = 1.0 / max(0.02, p.y - horizon);

@@ -1,0 +1,6 @@
+{
+  "name": "cyberpunk",
+  "background": {"template": "cyberpunk"},
+  "lyrics": {"template": "neon"},
+  "effects": ["flash", "beat_shake"]
+}
