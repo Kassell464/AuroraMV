@@ -50,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("AuroraMV")
+    app.setApplicationVersion("0.1.0")
     from ui.theme import DARK_QSS
 
     app.setStyleSheet(DARK_QSS)

@@ -16,6 +16,9 @@ dist/
 *.mp4
 *.webm
 *.mov
+exports/
+# 官方演示视频（提交到仓库）
+!assets/demo/*.mp4
 
 # 本地测试媒体（用户提供的歌曲/歌词，不提交到开源仓库）
 *.lrc
