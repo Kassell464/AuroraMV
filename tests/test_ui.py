@@ -67,15 +67,46 @@ class ControlPanelTestCase(unittest.TestCase):
         self.assertEqual(settings.resolution, "1080p")
         self.assertEqual(output, "output.mp4")
 
-    def test_seek_slider_emits_seconds(self) -> None:
-        panel = ControlPanel()
-        panel.set_progress(30.0, 100.0)
+
+class PlayerBarTestCase(unittest.TestCase):
+    """播放底栏（修复轮）：进度 seek、歌词开关、播放键、曲目信息。"""
+
+    def _bar(self):
+        from ui.panels.player_bar import PlayerBar
+
+        return PlayerBar()
+
+    def test_seek_emits_seconds(self) -> None:
+        bar = self._bar()
+        bar.set_progress(30.0, 100.0)
         received: list[float] = []
-        panel.seek_requested.connect(received.append)
-        panel._seek_slider.setValue(500)
-        panel._on_seek_released()
+        bar.seek_requested.connect(received.append)
+        bar._seek_slider.setValue(500)
+        bar._on_seek_released()
         self.assertEqual(len(received), 1)
         self.assertAlmostEqual(received[0], 50.0, places=1)
+
+    def test_lyrics_toggle_emits(self) -> None:
+        bar = self._bar()
+        received: list[bool] = []
+        bar.lyrics_toggled.connect(received.append)
+        bar._lyrics_button.setChecked(False)
+        self.assertEqual(received, [False])
+
+    def test_play_button_emits(self) -> None:
+        bar = self._bar()
+        received: list[int] = []
+        bar.play_pause_requested.connect(lambda: received.append(1))
+        bar._play_button.click()
+        self.assertEqual(received, [1])
+
+    def test_track_info_and_time_display(self) -> None:
+        bar = self._bar()
+        bar.set_track("自立巷", "歌词：test.lrc")
+        bar.set_progress(38.0, 212.0)
+        self.assertEqual(bar._title_label.text(), "自立巷")
+        self.assertEqual(bar._subtitle_label.text(), "歌词：test.lrc")
+        self.assertEqual(bar._time_label.text(), "0:38 / 3:32")
 
 
 class RendererEffectParamTestCase(unittest.TestCase):

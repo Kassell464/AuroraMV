@@ -189,6 +189,11 @@ class Renderer:
         """注入歌词提供器（阶段 6）。"""
         self._lyrics_provider = provider
 
+    def set_lyrics_visible(self, visible: bool) -> None:
+        """歌词开关。"""
+        if self.lyrics is not None:
+            self.lyrics.set_visible(visible)
+
     def set_lyric_template(self, name: str | None) -> None:
         """按名称切换歌词模板（templates/lyrics/<name>.json）。
 
@@ -277,13 +282,15 @@ class Renderer:
 
         self.background.render()
         self.effects.render()
-        if self.lyrics is not None:
-            self.lyrics.render(self._width, self._height)
 
         self.circle_program["u_radius"].value = self._circle_radius
         self.ctx.enable(moderngl.BLEND)
         self.circle_vao.render(moderngl.TRIANGLES)
         self.ctx.disable(moderngl.BLEND)
+
+        # 歌词在最上层（画面上方），不被粒子/圆形遮挡
+        if self.lyrics is not None:
+            self.lyrics.render(self._width, self._height)
 
         # 2) 后期处理：震动偏移 + 闪光叠加
         out = target if target is not None else self.ctx.screen
