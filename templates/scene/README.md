@@ -11,7 +11,7 @@
 
 | # | 预设 | 背景模板 | 歌词模板 | 效果 | 概念灵感 |
 |---|------|----------|----------|------|----------|
-| 1 | `cinema` | cinema（星云图片 + 慢镜头推进 + 暖色） | cinema | — | 电影镜头 |
+| 1 | `cinema` | cinema（星云图片 + 慢镜头推进 + 暖色 + **节拍切镜**） | cinema | — | 电影镜头 |
 | 2 | `aurora` | aurora（紫色旋臂银河，慢旋高星密度） | minimal | particle | 粒子舞台 |
 | 3 | `cyberpunk` | cyberpunk（品红霓虹网格，快速流动） | neon | flash、beat_shake | 赛博朋克 |
 | 4 | `stage` | stage（青色霓虹网格） | neon | beat_shake、flash | 歌词舞台 |

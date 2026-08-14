@@ -80,6 +80,18 @@ class ImageParams:
     zoom_amount: float = 0.2  # 缩放幅度（1.0 → 1.0+amount，模拟镜头推进）
     pan: str | None = None  # left / right / up / down
     tint: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    beat_cuts: bool = False  # 节拍镜头切换（第三批：每拍切一个机位）
+    cut_speed: float = 5.0  # 切镜过渡速度（越大越快）
+
+
+# 节拍镜头切换机位表（确定性循环：缩放 / 偏移 / 色温）
+CAMERA_CUT_SHOTS = (
+    {"zoom": 1.00, "offset": (0.00, 0.00), "tint": (1.00, 1.00, 1.00)},
+    {"zoom": 1.16, "offset": (-0.05, 0.02), "tint": (1.08, 0.98, 0.90)},
+    {"zoom": 1.30, "offset": (0.06, -0.04), "tint": (1.10, 1.02, 0.86)},
+    {"zoom": 1.08, "offset": (0.00, 0.05), "tint": (0.95, 0.98, 1.06)},
+    {"zoom": 1.22, "offset": (-0.07, -0.03), "tint": (1.06, 0.94, 0.92)},
+)
 
 
 @dataclass
@@ -206,6 +218,13 @@ class ImageBackgroundRenderer(BackgroundRenderer):
         self._zoom = 1.0
         self._offset = np.zeros(2, dtype=np.float32)
         self._pan_direction = np.zeros(2, dtype=np.float32)
+        self._tint = np.ones(3, dtype=np.float32)
+        self._cut_index = 0
+        self._target_zoom = 1.0
+        self._target_offset = np.zeros(2, dtype=np.float32)
+        self._target_tint = np.ones(3, dtype=np.float32)
+        self._last_time: float | None = None
+        self._last_beat = False
         self._program["u_image"].value = 0
 
     def load(self, source: str) -> None:
@@ -235,20 +254,42 @@ class ImageBackgroundRenderer(BackgroundRenderer):
         audio_state: AudioState | None = None,
         waveform: npt.NDArray[np.float32] | None = None,
     ) -> None:
-        # 缩放：1.0 → 1.0+amount 缓慢往复，模拟镜头推进（参数可调）
-        self._zoom = 1.0 + self.params.zoom_amount * (
-            0.5 + 0.5 * math.sin(time * self.params.zoom_speed * 2.0 * math.pi)
-        )
-        # 平移：沿设定方向缓慢往返
-        pan = self.params.pan
-        if pan:
-            self._pan_direction[:] = PAN_DIRECTIONS.get(pan, (0.0, 0.0))
+        dt = 0.0
+        if self._last_time is not None:
+            dt = max(0.0, min(time - self._last_time, 0.25))
+        self._last_time = time
+
+        beat = audio_state is not None and audio_state.beat
+        if self.params.beat_cuts:
+            # 节拍镜头切换（第三批）：每个节拍切到下一机位（确定性循环，
+            # 预览与导出共用同一节拍序列 → 所见即所导出）。
+            # 边沿触发：节拍窗口会持续多帧，只在 False→True 那一帧切镜。
+            if beat and not self._last_beat:
+                self._cut_index += 1
+                shot = CAMERA_CUT_SHOTS[self._cut_index % len(CAMERA_CUT_SHOTS)]
+                self._target_zoom = shot["zoom"]
+                self._target_offset[:] = shot["offset"]
+                self._target_tint[:] = shot["tint"]
+            self._last_beat = beat
+            k = 1.0 - math.exp(-max(self.params.cut_speed, 0.1) * dt)
+            self._zoom += (self._target_zoom - self._zoom) * k
+            self._offset += (self._target_offset - self._offset) * k
+            self._tint += (self._target_tint - self._tint) * k
         else:
-            self._pan_direction[:] = 0.0
-        if np.any(self._pan_direction):
-            drift = 0.5 + 0.5 * math.sin(time * 0.25)
-            self._offset = self._pan_direction * drift * 0.08
-        self._program["u_tint"].value = (*self.params.tint, 1.0)
+            # 经典缓慢镜头：缩放往复 + 平移漂移（参数可调）
+            self._zoom = 1.0 + self.params.zoom_amount * (
+                0.5 + 0.5 * math.sin(time * self.params.zoom_speed * 2.0 * math.pi)
+            )
+            pan = self.params.pan
+            if pan:
+                self._pan_direction[:] = PAN_DIRECTIONS.get(pan, (0.0, 0.0))
+            else:
+                self._pan_direction[:] = 0.0
+            if np.any(self._pan_direction):
+                drift = 0.5 + 0.5 * math.sin(time * 0.25)
+                self._offset = self._pan_direction * drift * 0.08
+            self._tint[:] = self.params.tint
+        self._program["u_tint"].value = (*self._tint, 1.0)
 
     def render(self) -> None:
         assert self._texture is not None, "图片背景请先 load 图片"

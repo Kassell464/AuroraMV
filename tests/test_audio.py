@@ -101,5 +101,39 @@ class AudioEnginePauseTestCase(unittest.TestCase):
             engine.stop()
 
 
+class AudioEngineEndTestCase(unittest.TestCase):
+    """自然播放结束：状态复位、位置归零（第三批细节调优）。"""
+
+    def test_natural_end_resets_state(self) -> None:
+        from unittest import mock
+
+        import pygame.mixer
+
+        from core.audio.engine import AudioEngine
+
+        engine = AudioEngine()
+        engine._playing = True
+        engine._paused = False
+        with mock.patch.object(pygame.mixer.music, "get_busy", return_value=False):
+            position = engine.position
+        self.assertEqual(position, 0.0)
+        self.assertFalse(engine.is_playing)
+        self.assertFalse(engine.is_paused)
+
+    def test_paused_state_not_treated_as_end(self) -> None:
+        from unittest import mock
+
+        import pygame.mixer
+
+        from core.audio.engine import AudioEngine
+
+        engine = AudioEngine()
+        engine._playing = False
+        engine._paused = True
+        with mock.patch.object(pygame.mixer.music, "get_pos", return_value=1234.0):
+            position = engine.position
+        self.assertAlmostEqual(position, 1.234, delta=0.01)
+
+
 if __name__ == "__main__":
     unittest.main()
