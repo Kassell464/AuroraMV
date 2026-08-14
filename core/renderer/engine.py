@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -40,6 +41,9 @@ from core.renderer.shader import (
     create_program,
 )
 from core.renderer.scene import Scene, SceneManager
+from core.lyrics.provider import LyricsProvider
+from core.lyrics.template import load_lyric_template
+from core.renderer.lyrics import DEFAULT_LYRIC_TEMPLATE, LyricsRenderer
 
 WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 
@@ -47,6 +51,9 @@ WaveformProvider = Callable[[int], npt.NDArray[np.float32]]
 BASE_RADIUS = 0.12
 RADIUS_SCALE = 0.25
 WAVEFORM_SAMPLES = 512
+
+# 歌词模板目录（templates/lyrics）
+LYRICS_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates" / "lyrics"
 
 
 class Renderer:
@@ -61,6 +68,8 @@ class Renderer:
         self._scene_manager: SceneManager | None = None
         self._active_scene_id: int | None = None
         self._active_scene: Scene | None = None
+        self.lyrics: LyricsRenderer | None = None
+        self._lyrics_provider: LyricsProvider | None = None
         self._waveform_provider: WaveformProvider | None = None
         self._width = 1280
         self._height = 720
@@ -94,6 +103,9 @@ class Renderer:
         # 默认背景：银河（阶段 4）
         self.background = create_background(self.ctx, "galaxy")
 
+        # 歌词渲染器（阶段 6，Layer 3）
+        self.lyrics = LyricsRenderer(self.ctx)
+
     def set_background(self, kind: str, source: str | None = None) -> None:
         """切换背景（阶段 4）。kind: image / galaxy / waveform / neon_grid。"""
         assert self.ctx is not None, "请先调用 initialize()"
@@ -113,16 +125,37 @@ class Renderer:
         self._active_scene_id = None
 
     def load_scene(self, scene: Scene | None) -> None:
-        """加载场景（规格 17.1 接口）。scene 为 None 时恢复默认银河背景。"""
+        """加载场景（规格 17.1 接口）。scene 为 None 时恢复默认背景与歌词模板。"""
         if scene is None:
             self.set_background("galaxy")
             self._active_scene = None
+            self.set_lyric_template(None)
             return
         self.set_background(scene.background.kind, scene.background.source)
         self._active_scene = scene
+        if scene.lyric_template:
+            self.set_lyric_template(scene.lyric_template)
+
+    def set_lyrics_provider(self, provider: LyricsProvider | None) -> None:
+        """注入歌词提供器（阶段 6）。"""
+        self._lyrics_provider = provider
+
+    def set_lyric_template(self, name: str | None) -> None:
+        """按名称切换歌词模板（templates/lyrics/<name>.json）。
+
+        name 为 None 时恢复默认模板；文件缺失时保持当前模板。
+        """
+        if self.lyrics is None:
+            return
+        if name is None:
+            self.lyrics.set_template(DEFAULT_LYRIC_TEMPLATE)
+            return
+        path = LYRICS_TEMPLATES_DIR / f"{name}.json"
+        if path.exists():
+            self.lyrics.set_template(load_lyric_template(str(path)))
 
     def update(self, time: float, audio_state: AudioState | None = None) -> None:
-        """更新帧状态：摄像机、圆形半径、背景。"""
+        """更新帧状态：摄像机、圆形半径、背景、场景、歌词。"""
         self._time = time
         self.camera.update(time)
         if audio_state is not None:
@@ -131,19 +164,26 @@ class Renderer:
             bass = 0.5 + 0.5 * math.sin(time * 2.0)
         self._circle_radius = BASE_RADIUS + bass * RADIUS_SCALE
 
+        music_time = audio_state.timestamp if audio_state is not None else self._time
+
         waveform = None
         if self._waveform_provider is not None:
             waveform = self._waveform_provider(WAVEFORM_SAMPLES)
-        self._update_scene(audio_state)
+        self._update_scene(music_time)
         if self.background is not None:
             self.background.update(time, audio_state, waveform)
 
-    def _update_scene(self, audio_state: AudioState | None) -> None:
+        line = None
+        if self._lyrics_provider is not None:
+            line = self._lyrics_provider.get_current_line(music_time)
+        if self.lyrics is not None:
+            self.lyrics.update(music_time, line, audio_state)
+
+    def _update_scene(self, music_time: float) -> None:
         """按音乐时间自动切换场景（阶段 5）。"""
         if self._scene_manager is None:
             return
-        scene_time = audio_state.timestamp if audio_state is not None else self._time
-        scene = self._scene_manager.get_scene(scene_time)
+        scene = self._scene_manager.get_scene(music_time)
         scene_id = scene.id if scene is not None else None
         if scene_id == self._active_scene_id:
             return
@@ -161,6 +201,9 @@ class Renderer:
         self.ctx.clear(0.03, 0.03, 0.06, 1.0)
 
         self.background.render()
+
+        if self.lyrics is not None:
+            self.lyrics.render(self._width, self._height)
 
         self.circle_program["u_radius"].value = self._circle_radius
         self.ctx.enable(moderngl.BLEND)

@@ -164,6 +164,33 @@ void main() {
 """
 
 
+# 歌词文本（阶段 6）：屏幕空间四边形 + 透明度
+LYRIC_VERTEX_SHADER = """
+#version 330
+in vec3 in_position;
+in vec2 in_uv;
+uniform vec2 u_center;
+uniform vec2 u_half_size;
+out vec2 v_uv;
+void main() {
+    v_uv = in_uv;
+    gl_Position = vec4(u_center + in_position.xy * u_half_size, 0.0, 1.0);
+}
+"""
+
+LYRIC_FRAGMENT_SHADER = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_text;
+uniform float u_alpha;
+out vec4 fragColor;
+void main() {
+    vec4 tex = texture(u_text, v_uv);
+    fragColor = vec4(tex.rgb, tex.a * u_alpha);
+}
+"""
+
+
 class ShaderError(RuntimeError):
     """着色器编译或链接失败。"""
 

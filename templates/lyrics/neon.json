@@ -1,0 +1,7 @@
+{
+  "name": "neon",
+  "font": "msyh.ttc",
+  "color": "#8fe8ff",
+  "glow": "#0f7fd4",
+  "animation": {"enter": "fade", "idle": "glow", "beat": "scale"}
+}
