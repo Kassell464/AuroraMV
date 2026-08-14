@@ -1,0 +1,7 @@
+{
+  "type": "cover_particles",
+  "params": {
+    "particle_color": [0.8, 0.55, 1.0],
+    "bob_speed": 1.0
+  }
+}

@@ -114,7 +114,7 @@ class BackgroundTemplateGLTestCase(unittest.TestCase):
         """MineRadio 概念灵感背景（黑胶/星球/隧道/频谱）均能绘制一帧。"""
         from core.renderer.background import create_background
 
-        for kind in ("vinyl", "planet", "tunnel", "spectrum"):
+        for kind in ("vinyl", "planet", "tunnel", "spectrum", "cover_particles"):
             with self.subTest(kind=kind):
                 bg = create_background(self.ctx, kind)
                 frame = self._render(bg)
@@ -153,7 +153,7 @@ class PresetPackTestCase(unittest.TestCase):
             names,
             {
                 "cinema", "aurora", "cyberpunk", "stage", "synthwave", "dj",
-                "vinyl", "planet", "tunnel", "spectrum",
+                "vinyl", "planet", "tunnel", "spectrum", "emily",
             },
         )
 

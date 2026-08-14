@@ -42,6 +42,7 @@ PRESET_DISPLAY = {
     "planet": ("星球", "雕塑球体 · 边缘光", "#7fb2ff"),
     "tunnel": ("滚筒隧道", "沉浸隧道 · 节拍脉冲", "#ff6ac1"),
     "spectrum": ("音域回响", "频谱地形 · 实时", "#39f0c0"),
+    "emily": ("Emily 封面粒子", "专辑封面 · 粒子爆发", "#c78aff"),
 }
 
 _RESOLUTIONS = ("360p", "480p", "720p", "1080p", "1440p")
@@ -113,6 +114,7 @@ class ControlPanel(QFrame):
     audio_file_selected = Signal(str)
     lrc_file_selected = Signal(str)
     cover_file_selected = Signal(str)
+    desktop_lyrics_toggled = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -224,6 +226,13 @@ class ControlPanel(QFrame):
         import_row.addWidget(self._lrc_button, 1)
         import_row.addWidget(self._cover_button, 1)
         layout.addLayout(import_row)
+
+        # 桌面歌词
+        layout.addWidget(self._section("桌面歌词", content))
+        self._desktop_lyrics_button = QPushButton("显示桌面歌词", content)
+        self._desktop_lyrics_button.setCheckable(True)
+        self._desktop_lyrics_button.toggled.connect(self.desktop_lyrics_toggled)
+        layout.addWidget(self._desktop_lyrics_button)
 
         layout.addStretch(1)
         scroll.setWidget(content)

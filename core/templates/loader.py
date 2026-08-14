@@ -19,6 +19,7 @@ _BACKGROUND_TYPES = (
     "planet",
     "tunnel",
     "spectrum",
+    "cover_particles",
 )
 _EFFECT_TYPES = ("beat_shake", "flash", "particle")
 _KINDS = ("lyrics", "background", "effects", "scene")

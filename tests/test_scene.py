@@ -74,7 +74,7 @@ class ScenePresetTestCase(unittest.TestCase):
         names = {p.name for p in presets}
         for expected in (
             "cinema", "aurora", "cyberpunk", "stage", "synthwave", "dj",
-            "vinyl", "planet", "tunnel", "spectrum",
+            "vinyl", "planet", "tunnel", "spectrum", "emily",
         ):
             self.assertIn(expected, names)
 
@@ -83,7 +83,10 @@ class ScenePresetTestCase(unittest.TestCase):
         kinds = {p.background.kind for p in presets}
         self.assertEqual(
             kinds,
-            {"image", "galaxy", "neon_grid", "waveform", "vinyl", "planet", "tunnel", "spectrum"},
+            {
+                "image", "galaxy", "neon_grid", "waveform", "vinyl", "planet",
+                "tunnel", "spectrum", "cover_particles",
+            },
         )
 
     def test_scenes_from_presets_divides_duration(self) -> None:
