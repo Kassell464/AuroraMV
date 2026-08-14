@@ -77,6 +77,26 @@ class RendererTestCase(unittest.TestCase):
         self.assertEqual(second, "WaveformBackground")
         self.renderer.set_scene_manager(None)  # 清理
 
+    def test_renders_with_lyrics(self) -> None:
+        """阶段 6：注入歌词提供器后渲染帧。"""
+        from core.lyrics.parser import LyricLine
+        from core.lyrics.provider import LyricsProvider
+
+        class StubProvider(LyricsProvider):
+            def __init__(self) -> None:
+                self.line = LyricLine(text="测试歌词", start=0.0, end=100.0)
+
+            def load(self) -> None:
+                pass
+
+            def get_current_line(self, time: float) -> LyricLine | None:
+                return self.line
+
+        self.renderer.set_lyrics_provider(StubProvider())
+        pixels = self._render_frame(t=1.0)
+        self.assertGreater(int(pixels.max()), 5, "歌词叠加后画面应有内容")
+        self.renderer.set_lyrics_provider(None)  # 清理
+
 
 if __name__ == "__main__":
     unittest.main()

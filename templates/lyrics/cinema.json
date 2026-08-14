@@ -1,0 +1,7 @@
+{
+  "name": "cinema",
+  "font": "msyhbd.ttc",
+  "color": "#f2e8d8",
+  "glow": "#8a6d3b",
+  "animation": {"enter": "fade", "idle": null, "beat": "scale"}
+}
