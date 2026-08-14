@@ -50,6 +50,9 @@ def main(argv: list[str] | None = None) -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("AuroraMV")
+    from ui.theme import DARK_QSS
+
+    app.setStyleSheet(DARK_QSS)
     controller = ApplicationController(audio_path=args.audio, lrc_path=args.lrc)
     controller.show()
     return app.exec()

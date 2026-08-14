@@ -79,6 +79,7 @@ class Renderer:
         self.lyrics: LyricsRenderer | None = None
         self._lyrics_provider: LyricsProvider | None = None
         self.effects = EffectManager()
+        self._effect_param_overrides: dict[str, dict[str, object]] = {}
         self._post_state = PostState()
         self._scene_texture: moderngl.Texture | None = None
         self._scene_fbo: moderngl.Framebuffer | None = None
@@ -153,6 +154,16 @@ class Renderer:
         """注入波形采样来源（阶段 4 波形背景用；渲染器不直接读音频）。"""
         self._waveform_provider = provider
 
+    def set_effect_param(self, name: str, **kwargs: object) -> None:
+        """持久化调整效果参数（阶段 10 UI 滑杆）。
+
+        立即应用到当前效果，并记录覆盖值；后续场景加载效果时自动重放，
+        保证用户调参跨场景保持。
+        """
+        override = self._effect_param_overrides.setdefault(name, {})
+        override.update(kwargs)
+        self.effects.set_params(name, **kwargs)
+
     def set_scene_manager(self, manager: SceneManager | None) -> None:
         """注入场景管理器（阶段 5）：update 时按音乐时间自动切换场景。"""
         self._scene_manager = manager
@@ -207,6 +218,7 @@ class Renderer:
                 continue
             try:
                 self.effects.add(create_effect(self.ctx, load_effect_spec(str(path))))
+                self.effects.set_params(name, **self._effect_param_overrides.get(name, {}))
             except TemplateError:
                 continue  # 无效模板跳过
 
