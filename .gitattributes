@@ -1,0 +1,8 @@
+# 统一行尾，避免跨平台差异
+* text=auto
+
+# 源码文件统一使用 LF
+*.py  text eol=lf
+*.md  text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
