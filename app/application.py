@@ -111,6 +111,7 @@ class ApplicationController:
         self.window.bar.play_pause_requested.connect(self._on_play_pause)
         self.window.bar.lyrics_toggled.connect(self._on_lyrics_toggled)
         self.window.bar.set_playing(self.audio.is_playing)
+        self._bar_playing = self.audio.is_playing
         self._update_track_info()
 
         # 进度轮询（拖动进度条期间不覆盖）
@@ -159,11 +160,17 @@ class ApplicationController:
             self.audio.pause()
         else:
             self.audio.play()  # 暂停中则续播，否则从头
-        self.window.bar.set_playing(self.audio.is_playing)
+        self._bar_playing = self.audio.is_playing
+        self.window.bar.set_playing(self._bar_playing)
 
     def _update_progress(self) -> None:
         position = self.audio.position
         self.window.bar.set_progress(position, self.audio.duration)
+        playing = self.audio.is_playing
+        if self._bar_playing != playing:
+            # 播放结束（或任何状态变化）时同步底栏播放键
+            self._bar_playing = playing
+            self.window.bar.set_playing(playing)
         self._update_desktop_lyrics(position)
 
     def _update_track_info(self) -> None:
@@ -174,6 +181,7 @@ class ApplicationController:
 
     def _on_seek(self, seconds: float) -> None:
         self.audio.seek(seconds)
+        self._bar_playing = True
         self.window.bar.set_playing(True)
 
     def _on_lyrics_toggled(self, enabled: bool) -> None:

@@ -147,5 +147,25 @@ class RendererEffectParamTestCase(unittest.TestCase):
         self.assertEqual(renderer._effect_param_overrides["particle"]["base_count"], 120)
 
 
+class PlaybackEndResetTestCase(unittest.TestCase):
+    """播放结束自动复位（第三批）：底栏播放键回到 ▶、进度归零。"""
+
+    def test_progress_syncs_bar_after_natural_end(self) -> None:
+        from types import SimpleNamespace
+
+        from app.application import ApplicationController
+        from ui.panels.player_bar import PlayerBar
+
+        ctrl = ApplicationController.__new__(ApplicationController)
+        bar = PlayerBar()
+        ctrl.window = SimpleNamespace(bar=bar)
+        ctrl.audio = SimpleNamespace(is_playing=False, position=0.0, duration=10.0)
+        ctrl._desktop_lyrics = None
+        ctrl._bar_playing = True  # 上一轮还在播放
+        ctrl._update_progress()
+        self.assertEqual(bar._play_button.text(), "▶")
+        self.assertEqual(bar._time_label.text(), "0:00 / 0:10")
+
+
 if __name__ == "__main__":
     unittest.main()

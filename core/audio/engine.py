@@ -110,6 +110,13 @@ class AudioEngine:
     def _position(self) -> float:
         if not (self._playing or self._paused):
             return 0.0
+        if self._playing and not pygame.mixer.music.get_busy():
+            # 自然播放结束（非暂停）：复位内部状态，位置归零
+            #（控制器轮询到 is_playing=False + 位置 0 → 复位 UI）
+            self._playing = False
+            self._paused = False
+            self._seek_origin = 0.0
+            return 0.0
         position = pygame.mixer.music.get_pos() / 1000.0  # ms → s
         if position < 0:  # 部分后端可能返回 -1
             position = self._clock() - self._play_started_at + self._seek_origin

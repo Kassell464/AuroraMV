@@ -4,7 +4,7 @@
 
 | 模板 | 类型 | 参数 | 预设包 |
 |------|------|------|--------|
-| `cinema` | image | 缩放速度/幅度、暖色 tint | cinema |
+| `cinema` | image | 缩放速度/幅度、暖色 tint、**节拍切镜（beat_cuts/cut_speed）** | cinema |
 | `aurora` | galaxy | 旋速、星亮度、星密度、旋臂色（紫） | aurora |
 | `cyberpunk` | neon_grid | 品红、快速流动 | cyberpunk |
 | `stage` | neon_grid | 青色、标准速度 | stage |

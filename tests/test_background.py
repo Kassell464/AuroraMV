@@ -74,6 +74,39 @@ class BackgroundTestCase(unittest.TestCase):
         self.assertFalse(np.array_equal(a, b), "波形变化应影响画面")
         bg.release()
 
+    def test_beat_cuts_switch_camera_deterministically(self) -> None:
+        """节拍镜头切换（第三批）：节拍触发切机位，画面变化且确定性循环。"""
+        path = os.path.join(FIXTURES, "test_bg.jpg")
+        if not os.path.exists(path):
+            self.skipTest(f"缺少 fixture: {path}")
+
+        def render_at(bg, t: float, beat: bool) -> np.ndarray:
+            state = AudioState(
+                timestamp=t, volume=0.5, bass=0.7, mid=0.4, treble=0.3,
+                beat=beat, bpm=120.0,
+            )
+            self.fbo.use()
+            self.ctx.clear(0.0, 0.0, 0.0)
+            bg.update(t, state)
+            bg.render()
+            return np.frombuffer(self.fbo.read(components=3), dtype=np.uint8).reshape(64, 64, 3)
+
+        params = {"beat_cuts": True, "cut_speed": 30.0}
+        sequence = ((0.1, False), (0.2, True), (0.3, False), (0.4, True))
+
+        bg = create_background(self.ctx, "image", path, params=params)
+        frames = [render_at(bg, t, beat) for t, beat in sequence]
+        self.assertEqual(bg._cut_index, 2, "两次节拍应切两个机位")
+        self.assertFalse(np.array_equal(frames[0], frames[1]), "节拍应改变画面")
+        self.assertFalse(np.array_equal(frames[1], frames[3]), "第二次节拍应再切机位")
+        bg.release()
+
+        # 确定性：重复同一节拍序列 → 相同机位与画面（预览/导出一致）
+        bg2 = create_background(self.ctx, "image", path, params=params)
+        frames2 = [render_at(bg2, t, beat) for t, beat in sequence]
+        self.assertTrue(np.array_equal(frames[3], frames2[3]), "同一节拍序列应产生相同画面")
+        bg2.release()
+
 
 if __name__ == "__main__":
     unittest.main()
