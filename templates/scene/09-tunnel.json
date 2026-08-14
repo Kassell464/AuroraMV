@@ -1,0 +1,6 @@
+{
+  "name": "tunnel",
+  "background": {"template": "tunnel"},
+  "lyrics": {"template": "neon"},
+  "effects": ["beat_shake", "flash"]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "spectrum",
+  "background": {"template": "spectrum"},
+  "lyrics": {"template": "minimal"},
+  "effects": []
+}

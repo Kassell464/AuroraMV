@@ -86,6 +86,9 @@ class Renderer:
         self._post_program: moderngl.Program | None = None
         self._post_vao: moderngl.VertexArray | None = None
         self._waveform_provider: WaveformProvider | None = None
+        self._spectrum_provider: WaveformProvider | None = None
+        self._cover_rgba: np.ndarray | None = None
+        self._cover_texture: moderngl.Texture | None = None
         self._width = 1280
         self._height = 720
         self._time = 0.0
@@ -135,6 +138,7 @@ class Renderer:
             ibo,
         )
         self._create_scene_fbo()
+        self._apply_cover()
 
     def set_background(
         self,
@@ -149,10 +153,38 @@ class Renderer:
             self.background.release()
         self.background = new
         self.background.set_aspect(self._width / self._height)
+        if self._cover_texture is not None and hasattr(new, "set_cover"):
+            new.set_cover(self._cover_texture)
 
     def set_waveform_provider(self, provider: WaveformProvider) -> None:
         """注入波形采样来源（阶段 4 波形背景用；渲染器不直接读音频）。"""
         self._waveform_provider = provider
+
+    def set_spectrum_provider(self, provider: WaveformProvider) -> None:
+        """注入频谱来源（音域回响背景用）。"""
+        self._spectrum_provider = provider
+
+    def set_cover_image(self, path: str) -> None:
+        """导入专辑封面（供黑胶唱片/封面粒子背景使用）。"""
+        from PIL import Image
+
+        import numpy as np
+
+        with Image.open(path) as img:
+            self._cover_rgba = np.asarray(img.convert("RGBA"), dtype=np.uint8)
+        self._apply_cover()
+
+    def _apply_cover(self) -> None:
+        """上传封面纹理并应用到当前背景（支持封面的背景）。"""
+        if self._cover_rgba is None or self.ctx is None:
+            return
+        from core.renderer.texture import upload_texture
+
+        if self._cover_texture is not None:
+            self._cover_texture.release()
+        self._cover_texture = upload_texture(self.ctx, self._cover_rgba)
+        if self.background is not None and hasattr(self.background, "set_cover"):
+            self.background.set_cover(self._cover_texture)
 
     def set_effect_param(self, name: str, **kwargs: object) -> None:
         """持久化调整效果参数（阶段 10 UI 滑杆）。
@@ -242,6 +274,12 @@ class Renderer:
         waveform = None
         if self._waveform_provider is not None:
             waveform = self._waveform_provider(WAVEFORM_SAMPLES)
+        if (
+            self._spectrum_provider is not None
+            and self.background is not None
+            and hasattr(self.background, "set_spectrum")
+        ):
+            self.background.set_spectrum(self._spectrum_provider(64))
         self._update_scene(music_time)
         if self.background is not None:
             self.background.update(time, audio_state, waveform)

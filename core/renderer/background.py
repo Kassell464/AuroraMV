@@ -28,6 +28,10 @@ from core.renderer.shader import (
     GALAXY_FRAGMENT_SHADER,
     IMAGE_FRAGMENT_SHADER,
     NEON_GRID_FRAGMENT_SHADER,
+    PLANET_FRAGMENT_SHADER,
+    SPECTRUM_FRAGMENT_SHADER,
+    TUNNEL_FRAGMENT_SHADER,
+    VINYL_FRAGMENT_SHADER,
     WAVEFORM_FRAGMENT_SHADER,
     create_program,
 )
@@ -100,6 +104,38 @@ class NeonGridParams:
 
     color: tuple[float, float, float] = (0.1, 0.9, 1.0)
     speed: float = 1.0
+
+
+@dataclass
+class VinylParams:
+    """黑胶唱片背景参数。"""
+
+    rotation_speed: float = 1.0
+    label_color: tuple[float, float, float] = (0.55, 0.14, 0.20)
+
+
+@dataclass
+class PlanetParams:
+    """星球背景参数。"""
+
+    color_a: tuple[float, float, float] = (0.16, 0.34, 0.58)
+    color_b: tuple[float, float, float] = (0.62, 0.80, 0.98)
+    speed: float = 1.0
+
+
+@dataclass
+class TunnelParams:
+    """滚筒隧道背景参数。"""
+
+    color: tuple[float, float, float] = (0.92, 0.36, 0.86)
+    speed: float = 1.0
+
+
+@dataclass
+class SpectrumParams:
+    """频谱地形背景参数。"""
+
+    color: tuple[float, float, float] = (0.3, 0.9, 1.0)
 
 
 def _pick(cls: type, params: dict[str, object]) -> dict[str, object]:
@@ -338,6 +374,134 @@ class NeonGridBackground(_ShaderBackground):
         self._program["u_speed"].value = self.params.speed
 
 
+class VinylBackground(_ShaderBackground):
+    """黑胶唱片：旋转盘体 + 沟槽 + 圆形专辑封面（转速随低频）。"""
+
+    def __init__(self, ctx: moderngl.Context, params: VinylParams | None = None) -> None:
+        super().__init__(ctx, VINYL_FRAGMENT_SHADER)
+        self.params = params or VinylParams()
+        self._fallback = ctx.texture((1, 1), 4, data=b"\x10\x10\x18\xff")
+        self._cover: moderngl.Texture = self._fallback
+        self._program["u_cover"].value = 0
+        self._program["u_has_cover"].value = 0.0
+
+    def set_cover(self, texture: moderngl.Texture) -> None:
+        """注入圆形专辑封面纹理（导入封面后调用）。"""
+        self._cover = texture
+        self._program["u_has_cover"].value = 1.0
+
+    def update(
+        self,
+        time: float,
+        audio_state: AudioState | None = None,
+        waveform: npt.NDArray[np.float32] | None = None,
+    ) -> None:
+        bass = float(audio_state.bass) if audio_state is not None else 0.5
+        self._program["u_time"].value = time
+        self._program["u_bass"].value = bass
+        self._program["u_aspect"].value = self._aspect
+        self._program["u_label_color"].value = self.params.label_color
+
+    def render(self) -> None:
+        self._cover.use(0)
+        super().render()
+
+    def release(self) -> None:
+        self._fallback.release()
+        super().release()
+
+
+class PlanetBackground(_ShaderBackground):
+    """星球：球体着色器（云带 + 边缘光），缓慢自转。"""
+
+    def __init__(self, ctx: moderngl.Context, params: PlanetParams | None = None) -> None:
+        super().__init__(ctx, PLANET_FRAGMENT_SHADER)
+        self.params = params or PlanetParams()
+
+    def update(
+        self,
+        time: float,
+        audio_state: AudioState | None = None,
+        waveform: npt.NDArray[np.float32] | None = None,
+    ) -> None:
+        bass = float(audio_state.bass) if audio_state is not None else 0.5
+        self._program["u_time"].value = time
+        self._program["u_bass"].value = bass
+        self._program["u_aspect"].value = self._aspect
+        self._program["u_speed"].value = self.params.speed
+        self._program["u_color_a"].value = self.params.color_a
+        self._program["u_color_b"].value = self.params.color_b
+
+
+class TunnelBackground(_ShaderBackground):
+    """滚筒隧道：沉浸式隧道，节拍脉冲。"""
+
+    def __init__(self, ctx: moderngl.Context, params: TunnelParams | None = None) -> None:
+        super().__init__(ctx, TUNNEL_FRAGMENT_SHADER)
+        self.params = params or TunnelParams()
+        self._flash = 0.0
+
+    def update(
+        self,
+        time: float,
+        audio_state: AudioState | None = None,
+        waveform: npt.NDArray[np.float32] | None = None,
+    ) -> None:
+        beat = audio_state is not None and audio_state.beat
+        self._flash = 1.0 if beat else self._flash * 0.9
+        bass = float(audio_state.bass) if audio_state is not None else 0.5
+        self._program["u_time"].value = time
+        self._program["u_bass"].value = bass
+        self._program["u_flash"].value = self._flash
+        self._program["u_aspect"].value = self._aspect
+        self._program["u_color"].value = self.params.color
+
+
+class SpectrumBackground(_ShaderBackground):
+    """音域回响：频谱地形高度图（真实 FFT 数据，每帧注入）。"""
+
+    def __init__(
+        self,
+        ctx: moderngl.Context,
+        params: SpectrumParams | None = None,
+        n_bands: int = 64,
+    ) -> None:
+        super().__init__(ctx, SPECTRUM_FRAGMENT_SHADER)
+        self.params = params or SpectrumParams()
+        self._n = n_bands
+        self._samples = np.zeros(n_bands, dtype=np.float32)
+        self._texture = ctx.texture(
+            (n_bands, 1), 1, dtype="f4", data=self._samples.tobytes()
+        )
+        self._texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        self._program["u_spectrum"].value = 0
+
+    def set_spectrum(self, values: npt.NDArray[np.float32]) -> None:
+        """每帧注入频谱数据（由渲染器从音频提供器拉取）。"""
+        w = np.asarray(values, dtype=np.float32).reshape(-1)
+        k = min(w.size, self._n)
+        self._samples[:k] = w[:k]
+        self._texture.write(self._samples.tobytes())
+
+    def update(
+        self,
+        time: float,
+        audio_state: AudioState | None = None,
+        waveform: npt.NDArray[np.float32] | None = None,
+    ) -> None:
+        bass = float(audio_state.bass) if audio_state is not None else 0.5
+        self._program["u_bass"].value = bass
+        self._program["u_color"].value = self.params.color
+
+    def render(self) -> None:
+        self._texture.use(0)
+        super().render()
+
+    def release(self) -> None:
+        self._texture.release()
+        super().release()
+
+
 def create_background(
     ctx: moderngl.Context,
     kind: str,
@@ -359,4 +523,14 @@ def create_background(
         return WaveformBackground(ctx, WaveformParams(**_pick(WaveformParams, values)))
     if kind == "neon_grid":
         return NeonGridBackground(ctx, NeonGridParams(**_pick(NeonGridParams, values)))
-    raise ValueError(f"未知背景类型: {kind}（可选 image/galaxy/waveform/neon_grid）")
+    if kind == "vinyl":
+        return VinylBackground(ctx, VinylParams(**_pick(VinylParams, values)))
+    if kind == "planet":
+        return PlanetBackground(ctx, PlanetParams(**_pick(PlanetParams, values)))
+    if kind == "tunnel":
+        return TunnelBackground(ctx, TunnelParams(**_pick(TunnelParams, values)))
+    if kind == "spectrum":
+        return SpectrumBackground(ctx, SpectrumParams(**_pick(SpectrumParams, values)))
+    raise ValueError(
+        f"未知背景类型: {kind}（可选 image/galaxy/waveform/neon_grid/vinyl/planet/tunnel/spectrum）"
+    )

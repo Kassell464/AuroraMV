@@ -60,6 +60,15 @@ class AudioAnalyzerTestCase(unittest.TestCase):
         mid = float((beats[0] + beats[1]) / 2.0)
         self.assertFalse(self.analyzer.get_state(mid).beat)
 
+    def test_get_spectrum_returns_bands(self) -> None:
+        """频谱地形数据：64 个对数频段，数值在 0..1。"""
+        spectrum = self.analyzer.get_spectrum(2.0)
+        self.assertEqual(spectrum.shape, (64,))
+        self.assertGreater(float(spectrum.max()), 0.0)
+        for value in spectrum:
+            self.assertGreaterEqual(float(value), 0.0)
+            self.assertLessEqual(float(value), 1.0)
+
 
 class AudioEnginePauseTestCase(unittest.TestCase):
     """暂停后继续播放：进度保持，不从头（修复轮）。"""

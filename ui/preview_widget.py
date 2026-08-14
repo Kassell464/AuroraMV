@@ -66,6 +66,10 @@ class PreviewWidget(QOpenGLWidget):
         self._waveform_provider = provider
         self.renderer.set_waveform_provider(provider)
 
+    def set_spectrum_provider(self, provider: WaveformProvider) -> None:
+        """注入频谱来源（音域回响背景用）。"""
+        self.renderer.set_spectrum_provider(provider)
+
     def initializeGL(self) -> None:
         self.renderer.initialize()
 

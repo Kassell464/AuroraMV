@@ -1,0 +1,6 @@
+{
+  "name": "planet",
+  "background": {"template": "planet"},
+  "lyrics": {"template": "cinema"},
+  "effects": []
+}

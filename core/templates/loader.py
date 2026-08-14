@@ -10,7 +10,16 @@ import json
 import re
 from pathlib import Path
 
-_BACKGROUND_TYPES = ("image", "galaxy", "waveform", "neon_grid")
+_BACKGROUND_TYPES = (
+    "image",
+    "galaxy",
+    "waveform",
+    "neon_grid",
+    "vinyl",
+    "planet",
+    "tunnel",
+    "spectrum",
+)
 _EFFECT_TYPES = ("beat_shake", "flash", "particle")
 _KINDS = ("lyrics", "background", "effects", "scene")
 
