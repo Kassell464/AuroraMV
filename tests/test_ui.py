@@ -67,6 +67,16 @@ class ControlPanelTestCase(unittest.TestCase):
         self.assertEqual(settings.resolution, "1080p")
         self.assertEqual(output, "output.mp4")
 
+    def test_seek_slider_emits_seconds(self) -> None:
+        panel = ControlPanel()
+        panel.set_progress(30.0, 100.0)
+        received: list[float] = []
+        panel.seek_requested.connect(received.append)
+        panel._seek_slider.setValue(500)
+        panel._on_seek_released()
+        self.assertEqual(len(received), 1)
+        self.assertAlmostEqual(received[0], 50.0, places=1)
+
 
 class RendererEffectParamTestCase(unittest.TestCase):
     def test_set_effect_param_persists(self) -> None:

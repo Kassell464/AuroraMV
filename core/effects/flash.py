@@ -39,8 +39,7 @@ class FlashEffect(Effect):
         audio_state: AudioState | None = None,
         post_state: PostState | None = None,
     ) -> None:
-        dt = min(max(0.0, time - self._last_time), 0.1)
-        self._last_time = time
+        dt = self._effect_dt(time)
         if self.params.trigger == "bass":
             self._level = float(audio_state.bass) if audio_state is not None else 0.0
         else:

@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, QTimer, Signal
 
 from core.audio.engine import AudioEngine
 from core.lyrics.provider import LRCProvider
@@ -97,7 +97,16 @@ class ApplicationController:
         self.window.panel.effect_param_changed.connect(self._on_effect_param)
         self.window.panel.play_pause_requested.connect(self._on_play_pause)
         self.window.panel.export_requested.connect(self._on_export)
+        self.window.panel.seek_requested.connect(self._on_seek)
+        self.window.panel.audio_file_selected.connect(self._on_audio_file)
+        self.window.panel.lrc_file_selected.connect(self._on_lrc_file)
         self.window.panel.set_playing(self.audio.is_playing)
+
+        # 进度轮询（拖动进度条期间不覆盖）
+        self._progress_timer = QTimer()  # 控制器非 QObject，不能作 parent
+        self._progress_timer.setInterval(250)
+        self._progress_timer.timeout.connect(self._update_progress)
+        self._progress_timer.start()
 
     def _setup_scenes(self) -> None:
         """把场景预设均分到整首曲目（阶段 5：自动切换）。"""
@@ -140,6 +149,29 @@ class ApplicationController:
         else:
             self.audio.play()
         self.window.panel.set_playing(self.audio.is_playing)
+
+    def _update_progress(self) -> None:
+        self.window.panel.set_progress(self.audio.position, self.audio.duration)
+
+    def _on_seek(self, seconds: float) -> None:
+        self.audio.seek(seconds)
+        self.window.panel.set_playing(True)
+
+    def _on_audio_file(self, path: str) -> None:
+        try:
+            self.audio.load(path)
+            self.audio.play()
+            self.audio_path = path
+            self._selected_preset = None
+            self.window.panel.select_preset("auto")
+            self._setup_scenes()
+            self.window.panel.set_playing(True)
+        except Exception as exc:
+            self.window.panel.set_export_state("fail", f"音频加载失败: {exc}")
+
+    def _on_lrc_file(self, path: str) -> None:
+        self.lrc_path = path
+        self.window.preview.renderer.set_lyrics_provider(LRCProvider(path))
 
     def _on_export(self, settings: ExportSettings, output: str) -> None:
         if not output:
