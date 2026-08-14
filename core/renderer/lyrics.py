@@ -61,6 +61,11 @@ class LyricsRenderer:
         self._font_path = resolve_font(template.font)
         self._cache.clear()  # 颜色/描边变化 → 清空纹理缓存
 
+    @property
+    def template(self) -> LyricTemplate:
+        """当前歌词模板（桌面歌词小窗等外部读取颜色用）。"""
+        return self._template
+
     def set_visible(self, visible: bool) -> None:
         """歌词开关。"""
         self._visible = visible

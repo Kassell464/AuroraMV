@@ -67,6 +67,33 @@ class ControlPanelTestCase(unittest.TestCase):
         self.assertEqual(settings.resolution, "1080p")
         self.assertEqual(output, "output.mp4")
 
+    def test_desktop_lyrics_toggle_emits(self) -> None:
+        panel = ControlPanel()
+        received: list[bool] = []
+        panel.desktop_lyrics_toggled.connect(received.append)
+        panel._desktop_lyrics_button.setChecked(True)
+        self.assertEqual(received, [True])
+
+
+class DesktopLyricsWindowTestCase(unittest.TestCase):
+    """桌面歌词小窗（第二批）：文本与模板颜色更新。"""
+
+    def _window(self):
+        from ui.desktop_lyrics import DesktopLyricsWindow
+
+        return DesktopLyricsWindow()
+
+    def test_set_lyric_updates_text_and_color(self) -> None:
+        window = self._window()
+        window.set_lyric("第几段回忆", (1.0, 0.0, 0.5))
+        self.assertEqual(window.label.text(), "第几段回忆")
+        self.assertIn("rgb(255, 0, 127)", window.label.styleSheet())
+
+    def test_empty_lyric_shows_note(self) -> None:
+        window = self._window()
+        window.set_lyric("", (1.0, 1.0, 1.0))
+        self.assertEqual(window.label.text(), "♪")
+
 
 class PlayerBarTestCase(unittest.TestCase):
     """播放底栏（修复轮）：进度 seek、歌词开关、播放键、曲目信息。"""

@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QThread, QTimer, Signal
+from PySide6.QtCore import QSettings, QThread, QTimer, Signal
 
 from core.audio.engine import AudioEngine
 from core.lyrics.provider import LRCProvider
@@ -23,6 +23,7 @@ from core.renderer.scene import (
     scenes_from_presets,
 )
 from export.ffmpeg import ExportProject, ExportSettings, Exporter
+from ui.desktop_lyrics import DesktopLyricsWindow
 from ui.main_window import MainWindow
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -73,14 +74,17 @@ class ApplicationController:
         self.window.preview.set_spectrum_provider(self.audio.get_spectrum)
 
         self.lrc_path = lrc_path
+        self._lyrics_provider: LRCProvider | None = None
         self.scenes: list[Scene] = []
         self.presets = load_scene_presets(str(SCENE_PRESETS_DIR))
         self._presets_by_name = {p.name: p for p in self.presets}
         self._selected_preset: str | None = None
         self._export_worker: ExportWorker | None = None
+        self._desktop_lyrics: DesktopLyricsWindow | None = None
 
         if lrc_path:
-            self.window.preview.renderer.set_lyrics_provider(LRCProvider(lrc_path))
+            self._lyrics_provider = LRCProvider(lrc_path)
+            self.window.preview.renderer.set_lyrics_provider(self._lyrics_provider)
 
         chosen_audio = audio_path or (str(DEMO_AUDIO) if DEMO_AUDIO.exists() else None)
         self.audio_path = chosen_audio
@@ -100,6 +104,7 @@ class ApplicationController:
         self.window.panel.audio_file_selected.connect(self._on_audio_file)
         self.window.panel.lrc_file_selected.connect(self._on_lrc_file)
         self.window.panel.cover_file_selected.connect(self._on_cover_file)
+        self.window.panel.desktop_lyrics_toggled.connect(self._on_desktop_lyrics_toggled)
 
         # 播放底栏
         self.window.bar.seek_requested.connect(self._on_seek)
@@ -157,7 +162,9 @@ class ApplicationController:
         self.window.bar.set_playing(self.audio.is_playing)
 
     def _update_progress(self) -> None:
-        self.window.bar.set_progress(self.audio.position, self.audio.duration)
+        position = self.audio.position
+        self.window.bar.set_progress(position, self.audio.duration)
+        self._update_desktop_lyrics(position)
 
     def _update_track_info(self) -> None:
         """底栏显示当前歌曲名与歌词名。"""
@@ -187,8 +194,43 @@ class ApplicationController:
 
     def _on_lrc_file(self, path: str) -> None:
         self.lrc_path = path
-        self.window.preview.renderer.set_lyrics_provider(LRCProvider(path))
+        self._lyrics_provider = LRCProvider(path)
+        self.window.preview.renderer.set_lyrics_provider(self._lyrics_provider)
         self._update_track_info()
+
+    # ---------- 桌面歌词 ----------
+
+    def _on_desktop_lyrics_toggled(self, enabled: bool) -> None:
+        """开关置顶桌面歌词小窗（位置记忆）。"""
+        if enabled:
+            if self._desktop_lyrics is None:
+                self._desktop_lyrics = DesktopLyricsWindow()
+            settings = QSettings("AuroraMV", "AuroraMV")
+            pos = settings.value("desktopLyrics/pos")
+            if pos is not None:
+                self._desktop_lyrics.move(pos)
+            self._desktop_lyrics.show()
+            self._update_desktop_lyrics(self.audio.position)
+        elif self._desktop_lyrics is not None:
+            QSettings("AuroraMV", "AuroraMV").setValue(
+                "desktopLyrics/pos", self._desktop_lyrics.pos()
+            )
+            self._desktop_lyrics.hide()
+
+    def _update_desktop_lyrics(self, position: float) -> None:
+        """桌面歌词小窗跟随播放进度更新当前行（颜色跟随歌词模板）。"""
+        window = self._desktop_lyrics
+        if window is None or not window.isVisible():
+            return
+        text = ""
+        if self._lyrics_provider is not None:
+            line = self._lyrics_provider.get_current_line(position)
+            text = line.text if line is not None else ""
+        color = (1.0, 1.0, 1.0)
+        lyrics = self.window.preview.renderer.lyrics
+        if lyrics is not None:
+            color = lyrics.template.color
+        window.set_lyric(text, color)
 
     def _on_cover_file(self, path: str) -> None:
         """导入专辑封面（黑胶唱片/封面粒子背景使用）。"""

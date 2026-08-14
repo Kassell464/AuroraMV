@@ -392,6 +392,69 @@ void main() {
 """
 
 
+# Emily 封面粒子（第二批）：圆形专辑封面卡片 + 节拍爆发粒子（快速入场）
+COVER_PARTICLES_FRAGMENT_SHADER = """
+#version 330
+
+in vec2 v_uv;
+
+uniform float u_time;
+uniform float u_bass;
+uniform float u_flash;
+uniform float u_aspect;
+uniform float u_bob_speed;
+uniform float u_has_cover;
+uniform vec3 u_particle_color;
+uniform sampler2D u_cover;
+
+out vec4 fragColor;
+
+float hash21(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+void main() {
+    vec2 p = (v_uv - 0.5) * 2.0;
+    p.x *= u_aspect;
+
+    vec3 col = vec3(0.010, 0.012, 0.024);
+
+    // 专辑封面：圆形卡片，缓慢浮动
+    float bob = sin(u_time * 0.9 * u_bob_speed) * 0.03;
+    vec2 center = vec2(0.0, 0.14 + bob);
+    float cover_r = 0.34;
+    float d = length(p - center);
+
+    float disc = 1.0 - smoothstep(cover_r, cover_r + 0.006, d);
+    if (u_has_cover > 0.5) {
+        vec2 cuv = (p - center) / (cover_r * 2.0) + 0.5;
+        vec3 cover = texture(u_cover, cuv).rgb;
+        cover *= 1.0 - 0.30 * smoothstep(0.55 * cover_r, cover_r, d);
+        col = mix(col, cover, disc);
+    } else {
+        col = mix(col, vec3(0.14, 0.16, 0.26), disc);
+    }
+
+    // 封面边缘光晕（低频越强越亮）
+    float halo = exp(-abs(d - cover_r) * 40.0) * (0.18 + u_bass * 0.5);
+    col += u_particle_color * halo;
+
+    // 粒子：网格散点，节拍爆发时快速入场 + 增亮
+    float burst = u_flash * 2.2 + u_bass * 1.2;
+    vec2 g = p * 7.0;
+    vec2 id = floor(g);
+    vec2 f = fract(g) - 0.5;
+    float h = hash21(id);
+    float twinkle = 0.5 + 0.5 * sin(u_time * (2.0 + 5.0 * u_bass) + h * 60.0);
+    float star = 1.0 - smoothstep(0.0, 0.10, length(f));
+    float visible = step(0.80, h);
+    col += u_particle_color * star * twinkle * visible * (0.35 + burst);
+
+    fragColor = vec4(col, 1.0);
+}
+"""
+
+
 class ShaderError(RuntimeError):
     """着色器编译或链接失败。"""
 

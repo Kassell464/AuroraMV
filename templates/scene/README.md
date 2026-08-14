@@ -7,7 +7,7 @@
 [`../background`](../background) 目录下的背景模板，也可以内联定义
 `{"type": ..., "params": ...}`（内联键覆盖模板键）。
 
-## 六套系统预设包
+## 系统预设包
 
 | # | 预设 | 背景模板 | 歌词模板 | 效果 | 概念灵感 |
 |---|------|----------|----------|------|----------|
@@ -17,6 +17,11 @@
 | 4 | `stage` | stage（青色霓虹网格） | neon | beat_shake、flash | 歌词舞台 |
 | 5 | `synthwave` | synthwave（橙红霓虹网格，慢速） | neon | flash | 合成波 |
 | 6 | `dj` | dj（亮青波形） | minimal | beat_shake、flash、particle | DJ 专属模式 |
+| 7 | `vinyl` | vinyl（旋转黑胶 + 圆形专辑封面） | minimal | — | 唱片视觉 |
+| 8 | `planet` | planet（星球球体 + 边缘光） | minimal | — | 星球视觉 |
+| 9 | `tunnel` | tunnel（滚筒隧道 + 节拍脉冲） | minimal | flash | 隧道视觉 |
+| 10 | `spectrum` | spectrum（真实频谱地形） | minimal | — | 频谱视觉 |
+| 11 | `emily` | emily（圆形封面 + 节拍粒子爆发） | minimal | particle | 封面粒子 |
 
 所有背景/歌词/效果参数均可调节：改 `templates/background/*.json`、
 `templates/lyrics/*.json`、`templates/effects/*.json` 中的 `params` 即可。

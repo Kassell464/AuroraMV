@@ -25,6 +25,7 @@ from PIL import Image
 from core.audio.state import AudioState
 from core.renderer.shader import (
     FULLSCREEN_VERTEX_SHADER,
+    COVER_PARTICLES_FRAGMENT_SHADER,
     GALAXY_FRAGMENT_SHADER,
     IMAGE_FRAGMENT_SHADER,
     NEON_GRID_FRAGMENT_SHADER,
@@ -136,6 +137,14 @@ class SpectrumParams:
     """频谱地形背景参数。"""
 
     color: tuple[float, float, float] = (0.3, 0.9, 1.0)
+
+
+@dataclass
+class CoverParticlesParams:
+    """Emily 封面粒子背景参数。"""
+
+    particle_color: tuple[float, float, float] = (0.80, 0.55, 1.0)
+    bob_speed: float = 1.0
 
 
 def _pick(cls: type, params: dict[str, object]) -> dict[str, object]:
@@ -502,6 +511,50 @@ class SpectrumBackground(_ShaderBackground):
         super().release()
 
 
+class CoverParticlesBackground(_ShaderBackground):
+    """Emily 封面粒子：圆形专辑封面卡片 + 节拍爆发粒子（快速入场）。"""
+
+    def __init__(
+        self, ctx: moderngl.Context, params: CoverParticlesParams | None = None
+    ) -> None:
+        super().__init__(ctx, COVER_PARTICLES_FRAGMENT_SHADER)
+        self.params = params or CoverParticlesParams()
+        self._fallback = ctx.texture((1, 1), 4, data=b"\x10\x10\x18\xff")
+        self._cover: moderngl.Texture = self._fallback
+        self._flash = 0.0
+        self._program["u_cover"].value = 0
+        self._program["u_has_cover"].value = 0.0
+
+    def set_cover(self, texture: moderngl.Texture) -> None:
+        """注入专辑封面纹理（导入封面后调用，引擎自动完成）。"""
+        self._cover = texture
+        self._program["u_has_cover"].value = 1.0
+
+    def update(
+        self,
+        time: float,
+        audio_state: AudioState | None = None,
+        waveform: npt.NDArray[np.float32] | None = None,
+    ) -> None:
+        beat = audio_state is not None and audio_state.beat
+        self._flash = 1.0 if beat else self._flash * 0.88
+        bass = float(audio_state.bass) if audio_state is not None else 0.5
+        self._program["u_time"].value = time
+        self._program["u_bass"].value = bass
+        self._program["u_flash"].value = self._flash
+        self._program["u_aspect"].value = self._aspect
+        self._program["u_bob_speed"].value = self.params.bob_speed
+        self._program["u_particle_color"].value = self.params.particle_color
+
+    def render(self) -> None:
+        self._cover.use(0)
+        super().render()
+
+    def release(self) -> None:
+        self._fallback.release()
+        super().release()
+
+
 def create_background(
     ctx: moderngl.Context,
     kind: str,
@@ -531,6 +584,10 @@ def create_background(
         return TunnelBackground(ctx, TunnelParams(**_pick(TunnelParams, values)))
     if kind == "spectrum":
         return SpectrumBackground(ctx, SpectrumParams(**_pick(SpectrumParams, values)))
+    if kind == "cover_particles":
+        return CoverParticlesBackground(
+            ctx, CoverParticlesParams(**_pick(CoverParticlesParams, values))
+        )
     raise ValueError(
-        f"未知背景类型: {kind}（可选 image/galaxy/waveform/neon_grid/vinyl/planet/tunnel/spectrum）"
+        f"未知背景类型: {kind}（可选 image/galaxy/waveform/neon_grid/vinyl/planet/tunnel/spectrum/cover_particles）"
     )

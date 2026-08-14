@@ -10,6 +10,11 @@
 | `stage` | neon_grid | 青色、标准速度 | stage |
 | `synthwave` | neon_grid | 橙红、慢速流动 | synthwave |
 | `dj` | waveform | 亮青波形 | dj |
+| `vinyl` | vinyl | 转速、唱片盘面色 | vinyl |
+| `planet` | planet | 星球双色、自转速度 | planet |
+| `tunnel` | tunnel | 隧道色、速度 | tunnel |
+| `spectrum` | spectrum | 频谱线色 | spectrum |
+| `emily` | cover_particles | 粒子色、浮动速度 | emily |
 
 场景预设通过 `"background": {"template": "<名称>"}` 引用本目录模板，
 也可用 `{"type": ..., "params": ...}` 内联定义。

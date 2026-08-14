@@ -1,0 +1,6 @@
+{
+  "name": "emily",
+  "background": {"template": "emily"},
+  "lyrics": {"template": "minimal"},
+  "effects": ["particle"]
+}
