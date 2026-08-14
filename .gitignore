@@ -1,0 +1,32 @@
+# 虚拟环境
+venv/
+.venv/
+
+# Python 字节码缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 构建与分发包
+build/
+dist/
+*.egg-info/
+
+# 导出产物
+*.mp4
+
+# 项目文件（.amv 为 zip 打包产物，按需提交）
+*.amv
+
+# 缓存
+cache/
+.cache/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+
+# 系统文件
+Thumbs.db
+.DS_Store

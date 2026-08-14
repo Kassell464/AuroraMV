@@ -1,0 +1,6 @@
+PySide6
+moderngl
+pygame
+numpy
+librosa
+soundfile
